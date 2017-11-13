@@ -26,6 +26,7 @@ classdef Frame < RGBDImage
         otherToThis_R
         %%to be remvoed
         tempK;
+        validIDs
  
     end
     methods
@@ -58,6 +59,8 @@ classdef Frame < RGBDImage
             obj.idepthVarValid = cell(globalParams.pyramidLevel,1);
             
             obj.tempK = cam_info_K;
+            
+            obj.validIDs = ones(size(imgRGB,1) - 6 + 1 ,size(imgRGB,2) - 6 + 1 );
         end
         
         function calculateMeanInformation(obj)

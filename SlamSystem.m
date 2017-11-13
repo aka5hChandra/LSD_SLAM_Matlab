@@ -59,7 +59,7 @@ classdef SlamSystem < handle
             thisToOther = obj.rgbdODAMTrack( trackingNewFrame);
             %obj.map.updateKeyframe(obj.currentKeyFrame);
             trackingNewFrame.prepareForStereoWith( obj.currentKeyFrame , thisToOther, obj.K, 1);
-            [x , y] = meshgrid(3:obj.height-3,3 :obj.width - 3);
+            [y , x] = meshgrid(3:obj.height-3,3 :obj.width - 3);
             [flag,pepx,pepy, x, y] = obj.map.makeAndCheckEPLMat( x , y ,trackingNewFrame);
             %trackingNewFrame.P3_to_P2 * T
             

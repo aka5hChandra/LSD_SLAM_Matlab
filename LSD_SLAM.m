@@ -43,7 +43,7 @@ classdef LSD_SLAM < handle
             
            
             
-            slamSystem = SlamSystem(cam_info.K,480,640);
+                slamSystem = SlamSystem(cam_info.K,480,640);
             
             prevT = [];
             %map = DepthMap(K,w,h);
