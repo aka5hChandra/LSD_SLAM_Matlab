@@ -32,7 +32,7 @@ classdef LSD_SLAM < handle
             
             
             myK = [254.327,0,267.382,0,375.938,231.599,0,0,1]';
-            cam_info_Msgs{1}.K = myK;
+            %cam_info_Msgs{1}.K = myK;
             
             
             cam_info.D = reshape(cam_info_Msgs{1}.D,1,5);
@@ -49,7 +49,7 @@ classdef LSD_SLAM < handle
             %map = DepthMap(K,w,h);
             
             
-            imageIdx = 1;
+            imageIdx = 12;
             stampA = depth_Msgs{imageIdx}.Header.Stamp.Sec+depth_Msgs{imageIdx}.Header.Stamp.Nsec*10^-9;
             fprintf(1,'Image A TimeStamp %15f\n', stampA);
             imageA = reshape(typecast(depth_Msgs{imageIdx}.Data,'single'),640,480)';
@@ -61,9 +61,9 @@ classdef LSD_SLAM < handle
             %slamSystem.randomInit(initFrame,1);
             slamSystem.depthInit(initFrame,1);
             
+            keyFrame = imageA2;
             
-            
-            imageIdx = 2;
+            imageIdx = 13;
             stampA = depth_Msgs{imageIdx}.Header.Stamp.Sec+depth_Msgs{imageIdx}.Header.Stamp.Nsec*10^-9;
             fprintf(1,'Image A TimeStamp %15f\n', stampA);
             imageA = reshape(typecast(depth_Msgs{imageIdx}.Data,'single'),640,480)';
@@ -71,7 +71,7 @@ classdef LSD_SLAM < handle
             imageA2 = cat(3,reshape(imageA1(1,:),640,480)',reshape(imageA1(2,:),640,480)',reshape(imageA1(3,:),640,480)');
             rgbdImg1 = RGBDImage(imageA,imageA2,cam_info.K);
             
-            
+             
             curFrame =  Frame(imageIdx, imageA,imageA2,cam_info.K);
             slamSystem.trackFrame(curFrame);
                
@@ -95,6 +95,10 @@ classdef LSD_SLAM < handle
                 
                 curFrame =  Frame(imageIdx, imageA,imageA2,cam_info.K);
                 slamSystem.trackFrame(curFrame);
+                %cp = cameraParameters('IntrinsicMatrix',cameraParams.IntrinsicMatrix,'RadialDistortion',cameraParams.RadialDistortion,'ImageSize',cameraParams.ImageSize);  cameraParams = cp;
+           
+                
+                
                 %{
                                 
                 [rows,cols]=size(imageA);

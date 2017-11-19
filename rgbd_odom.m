@@ -61,12 +61,12 @@ classdef rgbd_odom < handle
                 warpA = rgbdImg1.warpImage(T);
                 warpA_Z = warpA.getDepthImage();
                 warpA_I = warpA.getGrayImage();
-                %figure(2), subplot(2,3,1), imshow(imgB_Z,[0 8]);
-                %figure(2), subplot(2,3,2), imshow(warpA_Z,[0 8]);
-                %figure(2), subplot(2,3,3), imshow(abs(warpA_Z - imgB_Z),[ ]);
-                figure(2), subplot(2,3,1), imshow(imgB_I,[0 255]);
-                figure(2), subplot(2,3,2), imshow(warpA_I, [0 255]);
-                figure(2), subplot(2,3,3), imshow(abs(warpA_I - imgB_I),[ ]);
+                figure(2), subplot(2,3,1), imshow(imgB_Z,[0 8]);
+                figure(2), subplot(2,3,2), imshow(warpA_Z,[0 8]);
+                figure(2), subplot(2,3,3), imshow(abs(warpA_Z - imgB_Z),[ ]);
+                %figure(2), subplot(2,3,1), imshow(imgB_I,[0 255]);
+                %figure(2), subplot(2,3,2), imshow(warpA_I, [0 255]);
+                %figure(2), subplot(2,3,3), imshow(abs(warpA_I - imgB_I),[ ]);
                 for downsample_level=3:-1:3
                     %a_k = [0 0 0 0 0 0];
                     downsample_factor=2^downsample_level;
@@ -129,12 +129,12 @@ classdef rgbd_odom < handle
                 warpA2 = rgbdImg1.warpImage(T);
                 warpA2_Z = warpA2.getDepthImage();
                 warpA2_I = warpA2.getGrayImage();
-                %figure(2), subplot(2,3,4), imshow(imgB_Z,[0 8]);
-                %figure(2), subplot(2,3,5), imshow(warpA2_Z,[0 8]);
-                %figure(2), subplot(2,3,6), imshow(abs(warpA2_Z - imgB_Z),[ ]);
-                figure(2), subplot(2,3,4), imshow(imgB_I,[0 255]);
-                figure(2), subplot(2,3,5), imshow(warpA2_I,[0 255]);
-                figure(2), subplot(2,3,6), imshow(abs(warpA2_I - imgB_I),[ ]);
+                figure(2), subplot(2,3,4), imshow(imgB_Z,[0 8]);
+                figure(2), subplot(2,3,5), imshow(warpA2_Z,[0 8]);
+                figure(2), subplot(2,3,6), imshow(abs(warpA2_Z - imgB_Z),[ ]);
+                %figure(2), subplot(2,3,4), imshow(imgB_I,[0 255]);
+                %figure(2), subplot(2,3,5), imshow(warpA2_I,[0 255]);
+                %figure(2), subplot(2,3,6), imshow(abs(warpA2_I - imgB_I),[ ]);
                 breakhere = 1;
                 pause(5);
             end % loop over image pairs
@@ -383,11 +383,14 @@ classdef rgbd_odom < handle
             if (theta_k > 1e-10)
                 n_k = a_k(4:6)/theta_k;
                 n_cross_k = [0 -n_k(3) n_k(2); n_k(3) 0 -n_k(1); -n_k(2) n_k(1) 0];
-                R=cos(theta_k)*eye(3) + (1-cos(theta_k))*n_k'*n_k + sin(theta_k)*n_cross_k;
+                R = cos(theta_k)*eye(3) + (1-cos(theta_k))*(n_k'*n_k) + sin(theta_k)*n_cross_k;
+                V = eye(3) + ((1-cos(theta_k))/theta_k)*n_cross_k + (1 - sin(theta_k)/theta_k)*(n_k'*n_k);
+                t = V*a_k(1:3)';
             else
-                R=eye(3);
+                R = eye(3);
+                t = a_k(1:3)';
             end
-            t=a_k(1:3)';
+            
             T=[R t; 0 0 0 1];
         end
         
@@ -395,14 +398,19 @@ classdef rgbd_odom < handle
             R = T(1:3,1:3);
             t = T(1:3,4);
             theta = acos(0.5*(trace(R)-1));
+            
             if (theta > 1e-10)
-                a_k(4:6) = (1/(2*sin(theta)))*[R(3,2)-R(2,3), R(1,3)-R(3,1), R(2,1)-R(1,2)];
+                a_k(4:6) = theta*(1/(2*sin(theta)))*[R(3,2)-R(2,3), R(1,3)-R(3,1), R(2,1)-R(1,2)];
+                w = a_k(4:6);
+                w_cross = [0 -w(3) w(2); w(3) 0 -w(1); -w(2) w(1) 0];
+                V_inv = eye(3) - 0.5*w_cross + ((1 - theta*sin(theta)/(2*(1-cos(theta))))/theta^2)*w'*w;
+                a_k(1:3) = (V_inv*t)';
             else
                 a_k(4:6) = [0 0 0];
+                a_k(1:3) = t;
             end
-            a_k(4:6) = theta*a_k(4:6);
-            a_k(1:3) = t;
-        end        
+            
+        end 
         
         function Jval = numericalGradient(func, x, stepsizes)
             % Jacobian functor

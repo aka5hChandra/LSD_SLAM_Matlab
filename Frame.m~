@@ -61,7 +61,7 @@ classdef Frame < RGBDImage
             obj.tempK = cam_info_K;
             
             obj.validIDs = ones(size(imgRGB,1) - 6 + 1 ,size(imgRGB,2) - 6 + 1 );
-            obj.initialTrackedResidual = ones(size(imgRGB,1) - 6 + 1 ,size(imgRGB,2) - 6 + 1 );
+            o
         end
         
         function calculateMeanInformation(obj)

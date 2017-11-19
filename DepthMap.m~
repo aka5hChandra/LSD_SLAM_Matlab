@@ -40,10 +40,11 @@ classdef DepthMap < handle
             obj.activeFrame = new_frame;
             
             intialVar = ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2)) * globalParams.VAR_GT_INIT_INITIAL;
-            obj.depthHypothesis = DepthMapPixelHypothesis(new_frame.imgZ, new_frame.imgZ, intialVar, intialVar);
+            depth = new_frame.imgZ;%ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));% 
+            obj.depthHypothesis = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar);
             
             %%using this avoid nans
-            obj.priorDepth = obj.depthHypothesis.idepth;
+            obj.priorDepth = ones(size(obj.depthHypothesis.idepth,1) , size(obj.depthHypothesis.idepth,2));% obj.depthHypothesis.idepth; %
             obj.depthHypothesis.visualize(0);
         end
         
@@ -106,18 +107,13 @@ classdef DepthMap < handle
             %y = reshape(y , [] , 1);
             
             %%from c++ implementaion between 1 and 2 frame
-           %{
-            ref.thisToOther_t = [0.0730602 0.110193 -0.0344612];%[-0.00686165 , -0.01699,0.00674572];
-            ref.thisToOther_R = [ 0.998751 -0.0408764 -0.0287494 ;  0.04397  0.99218 0.116814  ; 0.0237496 -0.117932  0.992738]';
+           
+            %{
             
-             %ref.thisToOther_t = [0.01416, 0.0125024 , -0.002687];%[-0.00686165 , -0.01699,0.00674572];
-             %ref.thisToOther_R = [0.99986 ,-0.000353276, -0.0163908; 0.00790092, 0.999644,0.0266513;0.0163755,-0.0266607,0.9951]';
-             ref.K_otherToThis_R  = obj.K * inv( ref.thisToOther_R );
-            %}
             ref.thisToOther_t = [-0.0290017705 -0.000712459616 -0.00135277933];
-            ref.K_otherToThis_t = [7.71646357 0.702298999  0.00128124538];
+            ref.K_otherToThis_t = [7.71646357 0.702298999 0.00128124538];
             ref.K_otherToThis_R = [253.713959 4.06102848 -0.00221992028; -5.75850105 373.589294 -0.00994038116;267.901886 235.333847 0.999948144]'; 
-            
+            %}
             epx = (- obj.fx * ref.thisToOther_t(1)) + (ref.thisToOther_t(3)*(x - obj.cx));
             epy = (- obj.fy * ref.thisToOther_t(2)) + (ref.thisToOther_t(3)*(y - obj.cy));
             
@@ -220,7 +216,7 @@ classdef DepthMap < handle
             
             eplLengthSquared(~ref.validIDs) = 0;
             epx(~ref.validIDs) = 0;
-             epxy(~ref.validIDs) = 0;
+            epy(~ref.validIDs) = 0;
             %{
              [validIDs  ] = ( ~((eplGradSquared ./ ((gx.*gx)+(gy.*gy))) < globalParams.MIN_EPL_ANGLE_SQUARED));
             %{
@@ -250,7 +246,7 @@ classdef DepthMap < handle
          end
         
          function [flag] = doLineStereo(obj,u,v,epxn,epyn,referenceFrame)
-             referenceFrame.validIDs(53 - 3 + 1,3 - 3 + 1,:) = 1;
+             
               
           %{
               referenceFrame.thisToOther_t = [0.0730602 0.110193 -0.0344612];%[-0.00686165 , -0.01699,0.00674572];
@@ -269,7 +265,7 @@ classdef DepthMap < handle
                 KinvP(:,2) = obj.fyi*v+obj.cyi;
                 %%KinvP = [obj.fxi*u+obj.cxi,obj.fyi*v+obj.cyi,1.0];
              %}
-             
+              
              
              KinvP = ones(size(u,1),size(u,2) , 3);
              KinvP(:,:, 1) = referenceFrame.validIDs .* (obj.fxi*u+obj.cxi);
@@ -296,8 +292,11 @@ classdef DepthMap < handle
                 end
 %}              
                 %replace by effident mathod 
-                obj.priorDepth(66 - 3 + 1,13 - 3 + 1,:) = 1.433;
-                obj.priorDepth(53 - 3 + 1,3 - 3 + 1,:) = 0.72 ;
+                %{%}
+                %%referenceFrame.validIDs(53 - 3 + 1,3 - 3 + 1,:) = 1;
+              
+                
+                
                 temp_t = reshape(referenceFrame.K_otherToThis_t,1,1,3);
                 for i = 1 : size(u,1)
                     for j  = 1 : size(u,2)
@@ -408,19 +407,24 @@ classdef DepthMap < handle
             
                 
                 
-                 sv = sqrt(obj.depthHypothesis.idepth_var_smoothed);
+                sv = sqrt(obj.depthHypothesis.idepth_var_smoothed);
                 min_idepth = obj.depthHypothesis.idepth_smoothed - sv*globalParams.STEREO_EPL_VAR_FAC;
                 max_idepth = obj.depthHypothesis.idepth_smoothed + sv*globalParams.STEREO_EPL_VAR_FAC;
                 min_idepth(min_idepth < 0) = 0;
                 oneByMin_Depth = 1/globalParams.MIN_DEPTH;
                 max_idepth(max_idepth > oneByMin_Depth) = oneByMin_Depth;
                 
+                %%for testing
+                    %{
+                 obj.priorDepth(66 - 3 + 1,13 - 3 + 1,:) = 1.433;
+                obj.priorDepth(53 - 3 + 1,3 - 3 + 1,:) = 0.72 ;
                  max_idepth(66 - 3 + 1,13 - 3 + 1,:) = 2.14;
                 min_idepth(66 - 3 + 1,13 - 3 + 1,:) = 0.726;
                 
                 max_idepth(53 - 3 + 1,3 - 3 + 1,:) = 1.42;
                 min_idepth(53 - 3 + 1,3 - 3 + 1,:) = 0.0013;
-                
+                %}
+                %%%
                 
                 pClose = zeros(size(pInf,1),size(pInf,2),3);
                 pFar = zeros(size(pInf,1),size(pInf,2),3);
@@ -437,6 +441,13 @@ classdef DepthMap < handle
                                pClose(i,j,:)  = pClose(i,j,:)  ./ pClose(i,j,3); 
                     
                     pFar(i,j,:)  = pInf(i,j,:) + temp_t *min_idepth(i,j);
+                    
+                    if (pFar(i,j,3) < 0.001 )
+                        referenceFrame.validIDs(i, j) = 0;
+                        pFar(i,j,:) = 0;
+                    else
+                         pFar(i,j,:)  = pFar(i,j,:)  ./ pFar(i,j,3); 
+                    end
                         end
                     end
                  end
@@ -455,7 +466,9 @@ classdef DepthMap < handle
                     pFar(i,:)  = pInf(i,:) + referenceFrame.K_otherToThis_t'*min_idepth(u(i),v(i));
                 end
                 %}
-                
+                 
+                 
+                %{
                  referenceFrame.validIDs = referenceFrame.validIDs & (~(pFar(:,:,3) < 0.001 ));
                  
                  pF1 = pFar(:,:,1);
@@ -468,7 +481,7 @@ classdef DepthMap < handle
                  pFar(:,:,1) = pF1;
                  pFar(:,:,2) = pF2;
                  pFar(:,:,3) = pF3;
-                 
+                 %}
                  referenceFrame.validIDs = referenceFrame.validIDs & ~(isnan(pFar(:,:,1)+pClose(:,:,1)));
                  %{
                 validIDs = ~(pFar(:,3) < 0.001 );%%%%% | max_idepth < min_idepth);
@@ -503,7 +516,7 @@ classdef DepthMap < handle
                 %}
                 longerEplIds =  eplLength > globalParams.MAX_EPL_LENGTH_CROP;
                 
-                
+                if(any(any(longerEplIds)))
                 pad = zeros(size(incx,1) ,size(incx,2));
                 pad(longerEplIds) = (globalParams.MAX_EPL_LENGTH_CROP./eplLength(longerEplIds));
 	
@@ -514,7 +527,7 @@ classdef DepthMap < handle
                 
                 pClose(longerEplIds,1) = pFar(longerEplIds,1) + incx(longerEplIds).*pad(longerEplIds);
                 pClose(longerEplIds,2) = pFar(longerEplIds,2) + incy(longerEplIds).*pad(longerEplIds);
-                
+                end
                 incx = incx .* (globalParams.GRADIENT_SAMPLE_DIST./eplLength);
                 incy = incy .* (globalParams.GRADIENT_SAMPLE_DIST./eplLength);
                 
@@ -530,7 +543,8 @@ classdef DepthMap < handle
                 
                 %% make epl long enough (pad a little bit).
                 shoterEplIds = eplLength < globalParams.MIN_EPL_LENGTH_CROP;
-	
+        
+                 if(any(any(shoterEplIds)))
                 %t = ones(size(incx,1) ,size(incx,2)) * globalParams.MIN_EPL_LENGTH_CROP;
                 pad = zeros(size(incx,1) ,size(incx,2));
                 pad(shoterEplIds) = (globalParams.MIN_EPL_LENGTH_CROP - (eplLength(shoterEplIds))) / 2.0;
@@ -540,9 +554,9 @@ classdef DepthMap < handle
                 pClose(:,:,1) =  pClose(:,:,1) + incx.*pad;
                 pClose(:,:,2) = pClose(:,:,2) +incy.*pad;
 	
-                
+                 end
                 %%If inf point is outside of image: skip pixel.
-                eplInsideIDs = ~(pFar(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER)
+                eplInsideIDs = ~(pFar(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER);
                 
                 
                % referenceFrame.validIDs = referenceFrame.validIDs & ~(pFar(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER);
@@ -564,7 +578,7 @@ classdef DepthMap < handle
                 %}
                 %% if near point is outside: move inside, and test length again.
 
-			%%eplInsideIDs = ~(pClose(:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER)
+			eplInsideIDALLs = ~(pClose(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER);
 	
             eplInsideIDs = referenceFrame.validIDs & (pClose(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER);
             toAdd = (globalParams.SAMPLE_POINT_TO_BORDER - pClose(:,:,1)) ./ incx;
@@ -602,9 +616,14 @@ classdef DepthMap < handle
               fincy = pClose(:,:,2) - pFar(:,:,2);
 		      newEplLength = sqrt(fincx.*fincx+fincy.*fincy);
               
-              
-              referenceFrame.validIDs = referenceFrame.validIDs & (~(pClose(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER | newEplLength < 8.0));
-             
+              pC1 = pClose(:,:,1);
+              pC2 = pClose(:,:,2);
+              pF1 = pFar(:,:,1);
+              pF2 = pFar(:,:,2);
+              te = ones(size(pFar,1),size(pFar,2));
+              te((pC1(eplInsideIDALLs) <= globalParams.SAMPLE_POINT_TO_BORDER | pC1(eplInsideIDALLs) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER |pC2(eplInsideIDALLs) <= globalParams.SAMPLE_POINT_TO_BORDER | pC2(eplInsideIDALLs) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER | ~(newEplLength(eplInsideIDALLs) < 8.0) )) = 0;
+              referenceFrame.validIDs = referenceFrame.validIDs & te;
+              %referenceFrame.validIDs = referenceFrame.validIDs &  ~(newEplLength < 8.0);
               %{
               eplInsideIDs = ~(pClose(:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER | newEplLength < 8.0);
               pFar = pFar(eplInsideIDs , :);
@@ -624,12 +643,22 @@ classdef DepthMap < handle
               
               %}
                 %{
+              
+              
+                pc = [16.3114052,86.9859619,1]
+                pf = [15.1771603 ,74.3268051 , 1]
+            imshow(referenceFrame.imgRGB)
+                    hold on;
+                line([pc(1,2),pf(1,2)],[pc(1,1),pf(1,1)])
+                close all;
+                figure();
                 imshow(referenceFrame.imgRGB) 
                 hold on;
+                [x, y] = find(referenceFrame.validIDs);
                 l = 1;
-                for l = 1: size(pClose , 1)
-                line([pClose(l,1),pFar(l,1)],[pClose(l,2),pFar(l,2)])
-                %line([pClose(l,1),pClose(l,2)],[pFar(l,1),pFar(l,2)])
+                for l = 1: size(x , 1)
+                line([pClose(x(l) , y(l),2),pFar(x(l) , y(l),2)],[pClose(x(l) , y(l),1),pFar(x(l) , y(l),1)])
+                %line([pClose(x(l) , y(l),1),pClose(x(l) , y(l),2)],[pFar(x(l) , y(l),1),pFar(x(l) , y(l),2)])
                 end
               %}
                 %{
@@ -663,15 +692,12 @@ classdef DepthMap < handle
              val_cp = interp2(x,y,referenceFrameForIntepolation,pF1,pF2, 'cubic');
              val_cp_p1 = interp2(x,y,referenceFrameForIntepolation,pF1+ix,pF2+iy, 'cubic');
              val_cp_p2 = zeros(size(val_cp_p1,1),1);
+             %{%
+             
+            
              
              
-             val_cp_m2 = 172.33;
-             val_cp_m1 = 173.50;
-             val_cp = 174.89;
-             val_cp_p1 = 175.914;
-             
-             
-         
+         %}
               e1A = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
               e2A = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
               e3A = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
@@ -688,8 +714,8 @@ classdef DepthMap < handle
               
               loopCounter =  zeros(size(val_cp_p1,1),size(val_cp_p1,2));
               eeLast =  ones(size(val_cp_p1,1),size(val_cp_p1,2)) .* -1;
-              loopCBest= zeros(size(val_cp_p1,1),size(val_cp_p1,2));
-              loopCSecond = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
+              loopCBest= ones(size(val_cp_p1,1),size(val_cp_p1,2)) .* -1;
+              loopCSecond = ones(size(val_cp_p1,1),size(val_cp_p1,2)) .* -1;
               best_match_x = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
               best_match_y = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
               best_match_err = ones(size(val_cp_p1,1),size(val_cp_p1,2)) * 1e50;
@@ -697,15 +723,23 @@ classdef DepthMap < handle
               bestWasLastLoop = ones(size(val_cp_p1,1),size(val_cp_p1,2)) * false;
               best_match_errPost = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
               best_match_DiffErrPost = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
+              secondBestMatchIds = false(size(val_cp_p1,1),size(val_cp_p1,2));
+              
+              
+              best_match_errPre = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
+			 best_match_DiffErrPre = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
+              
                     
                     cpx = pFar(:,:,1);
                     cpy = pFar(:,:,2);
                     cpx = cpx(referenceFrame.validIDs);
                     cpy = cpy(referenceFrame.validIDs);
+                    bestMacthErrIds = false(size(cpy,1),1);
+                    
                     
                     
                     pC1= pClose(:,:,1);
-                    pC2 = pClose(:,:,1);
+                    pC2 = pClose(:,:,2);
                     pC1 = pC1(referenceFrame.validIDs);
                     pC2 = pC2(referenceFrame.validIDs);
                     %{
@@ -733,22 +767,34 @@ classdef DepthMap < handle
                 realVal = interp2(x,y,activeFrameForIntepolation,uu,vv,'cubic') ; 
                 realVal_m2 = interp2(x,y,activeFrameForIntepolation,uu - epxnRf, vv - epynRf, 'cubic');
                 realVal_p2 = interp2(x,y,activeFrameForIntepolation,uu + epxnRf, vv + epynRf, 'cubic');
+                   %{%
                    
-                realVal_p1 = 177.858;
-                realVal_m1 = 174.073;
-                realVal = 176;
-                realVal_m2 = 173.838;
-                realVal_p2 = 178.885;
-                    
-                    
+                
+                 %}   
              % iteratroID = (incx < 0) == (cpx > pClose(:,:,1)) & (incy < 0) == (cpy > pClose(:,:,2)); 
               iteratroID = (ix < 0) == (cpx > pC1) & (iy < 0) == (cpy > pC2); 
+              %{
+              
+                 linID = iteratroID;%find(uu == 66 & vv == 13 );
+                val_cp_m2(linID) = 172.33;
+             val_cp_m1( linID)  = 173.50;
+             val_cp(linID)  = 174.89;
+             val_cp_p1( linID)  = 175.914;
+                   
+                realVal_p1(linID)  = 177.858;
+                realVal_m1( linID)  = 174.073;
+                realVal( linID)  = 176;
+                realVal_m2( linID)  = 173.838;
+                realVal_p2( linID) = 178.885;
+                    
+              %}
                     loopCounterAll = 0;
-             while(any(iteratroID) | all(loopCounter == 0))
+             while(any(iteratroID) | (loopCounterAll == 0))
 	
              val_cp_p2(iteratroID) = interp2(x,y,referenceFrameForIntepolation,cpx(iteratroID)+2 * ix(iteratroID),cpy(iteratroID)+ 2 *iy(iteratroID), 'cubic');
-             val_cp_p2(iteratroID) = 176.055;
+             %val_cp_p2(iteratroID) = 176.055;
               %%val_cp_p2(iteratroID) = 176.98;
+              %val_cp_p2(iteratroID) =  177.27;
               ee = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
              if mod(loopCounterAll , 2) ==0
                  e1A(iteratroID)  = val_cp_p2(iteratroID)  - realVal_p2(iteratroID) ;ee(iteratroID)  = ee(iteratroID)  + e1A(iteratroID) .*e1A(iteratroID) ;
@@ -768,7 +814,7 @@ classdef DepthMap < handle
              
             %% do I have a new winner??
             %%if so: set.
-             bestMacthErrIds = ee(iteratroID) < best_match_err(iteratroID);
+             bestMacthErrIds(iteratroID) = ee(iteratroID) < best_match_err(iteratroID);
 		if any(bestMacthErrIds)
 			%%put to second-best
 			second_best_match_err(bestMacthErrIds)=best_match_err(bestMacthErrIds);
@@ -778,8 +824,8 @@ classdef DepthMap < handle
 			best_match_err(bestMacthErrIds) = ee(bestMacthErrIds);
 			loopCBest(bestMacthErrIds) = loopCounter(bestMacthErrIds);
 
-			best_match_errPre = eeLast(bestMacthErrIds);
-			best_match_DiffErrPre = e1A(bestMacthErrIds).*e1B(bestMacthErrIds) + e2A(bestMacthErrIds).*e2B(bestMacthErrIds) + e3A(bestMacthErrIds).*e3B(bestMacthErrIds) + e4A(bestMacthErrIds).*e4B(bestMacthErrIds) + e5A(bestMacthErrIds).*e5B(bestMacthErrIds);
+			best_match_errPre(bestMacthErrIds) = eeLast(bestMacthErrIds);
+			best_match_DiffErrPre(bestMacthErrIds) = e1A(bestMacthErrIds).*e1B(bestMacthErrIds) + e2A(bestMacthErrIds).*e2B(bestMacthErrIds) + e3A(bestMacthErrIds).*e3B(bestMacthErrIds) + e4A(bestMacthErrIds).*e4B(bestMacthErrIds) + e5A(bestMacthErrIds).*e5B(bestMacthErrIds);
 			best_match_errPost(bestMacthErrIds) = -1;
 			best_match_DiffErrPost(bestMacthErrIds) = -1;
 
@@ -799,10 +845,10 @@ classdef DepthMap < handle
 
 			%% collect second-best:
 			%% just take the best of all that are NOT equal to current best.
-                secondBestMatchIds = ee(NotbestMacthErrIds)  < second_best_match_err;
+                secondBestMatchIds  =  (ee < second_best_match_err) ;
 			
-				second_best_match_err(NotbestMacthErrIds & secondBestMatchIds)=ee(secondBestMatchIds);
-				loopCSecond(NotbestMacthErrIds & secondBestMatchIds) = loopCounter(secondBestMatchIds);
+				second_best_match_err(NotbestMacthErrIds & secondBestMatchIds)=ee(NotbestMacthErrIds & secondBestMatchIds);
+				loopCSecond(NotbestMacthErrIds & secondBestMatchIds) = loopCounter(NotbestMacthErrIds &secondBestMatchIds);
 		
             end
         end
@@ -813,8 +859,8 @@ classdef DepthMap < handle
         val_cp_m1(iteratroID)  = val_cp(iteratroID) ; 
         val_cp(iteratroID)  = val_cp_p1(iteratroID) ; 
         val_cp_p1(iteratroID)  = val_cp_p2(iteratroID) ;
-        cpx(iteratroID)  = cpx(iteratroID)  + incx(iteratroID) ;
-		cpy(iteratroID)  = cpy(iteratroID)  + incy(iteratroID) ;
+        cpx(iteratroID)  = cpx(iteratroID)  + ix(iteratroID) ;
+		cpy(iteratroID)  = cpy(iteratroID)  + iy(iteratroID) ;
         loopCounter(iteratroID)  = loopCounter(iteratroID)  + 1;
         
       
@@ -839,7 +885,8 @@ classdef DepthMap < handle
                 v = v(uu - 3 + 1 , vv - 3 + 1,:);%(validIDs);
         %}
 	 %%check if clear enough winner
-	validIDs = validIDs & ~(abs(loopCBest - loopCSecond) > 1.0 & globalParams.MIN_DISTANCE_ERROR_STEREO .* best_match_err > second_best_match_err);
+     %validIDs &
+	validIDs = validIDs & ~((abs(loopCBest - loopCSecond) > 1.0 )& (globalParams.MIN_DISTANCE_ERROR_STEREO .* best_match_err > second_best_match_err));
     
      
    %{
@@ -854,28 +901,45 @@ classdef DepthMap < handle
      %}
      %% have to implement if(useSubpixelStereo)
      
+    newValidIDs = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    gradAlongLine  = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    bm_error = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    bm_x = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    bm_y = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    for i = 1 : size(validIDs)
+        if (validIDs(i))
+     newValidIDs(uu(i) - 3 + 1 , vv(i) - 3 + 1) = 1;
+    
+     tmp = realVal_p2(i ,1) - realVal_p1(i,1);
+     gradAlongLine(uu(i) - 3 + 1 , vv(i) - 3 + 1) = gradAlongLine(uu(i) - 3 + 1 , vv(i) - 3 + 1) + (tmp.*tmp);
+     
+     tmp = realVal_p1(i ,  1) - realVal(i ,  1);
+     gradAlongLine(uu(i) - 3 + 1 , vv(i) - 3 + 1) = gradAlongLine(uu(i) - 3 + 1 , vv(i) - 3 + 1) + (tmp.*tmp);
+     
+     tmp = realVal(i ,  1) - realVal_m1(i ,  1);
+     gradAlongLine(uu(i) - 3 + 1 , vv(i) - 3 + 1) = gradAlongLine(uu(i) - 3 + 1 , vv(i) - 3 + 1) + (tmp.*tmp);
+     
+     tmp = realVal_m1(i ,  1) - realVal_m2(i ,  1);
+     gradAlongLine(uu(i) - 3 + 1 , vv(i) - 3 + 1) = gradAlongLine(uu(i) - 3 + 1 , vv(i) - 3 + 1) + (tmp.*tmp);
+     
+     bm_error(uu(i) - 3 + 1 , vv(i) - 3 + 1) = best_match_err(i,1);      
+     bm_x(uu(i) - 3 + 1 , vv(i) - 3 + 1) = best_match_x(i,1);
+     bm_y(uu(i) - 3 + 1 , vv(i) - 3 + 1) = best_match_y(i,1);
+        end
+    end
+    close all;
+    imshow(newValidIDs)
+    referenceFrame.validIDs = newValidIDs;
      %% sampleDist is the distance in pixel at which the realVal's were sampled
-	 sampleDist = globalParams.GRADIENT_SAMPLE_DIST*rescaleFactor(uu - 3 + 1 , vv - 3 + 1,:);
+	 sampleDist =  referenceFrame.validIDs .*(globalParams.GRADIENT_SAMPLE_DIST.* rescaleFactor);
+     gradAlongLine = gradAlongLine./(sampleDist.*sampleDist);
 
-	gradAlongLine = zeros(size(realVal_p2,1),1);
-	tmp = realVal_p2 - realVal_p1;  
-    gradAlongLine = gradAlongLine + (tmp.*tmp);
-	tmp = realVal_p1 - realVal;  
-    gradAlongLine = gradAlongLine + (tmp.*tmp);
-	tmp = realVal - realVal_m1;  
-    gradAlongLine = gradAlongLine + (tmp.*tmp);
-	tmp = realVal_m1 - realVal_m2;  
-    gradAlongLine =gradAlongLine + (tmp.*tmp);
-
-	gradAlongLine = gradAlongLine ./ (sampleDist.*sampleDist);
+	
 
 	%% check if interpolated error is OK. use evil hack to allow more error if there is a lot of gradient.
-	validIDs = validIDs & ~(best_match_err > globalParams.MAX_ERROR_STEREO + sqrt( gradAlongLine).*20);
+    %%% not working
+	%%%referenceFrame.validIDs  = referenceFrame.validIDs  & ~(bm_error > ( globalParams.MAX_ERROR_STEREO + sqrt( gradAlongLine).*20));
 
-         uu = uu(validIDs);
-     vv = vv(validIDs);
-      referenceFrame.validIDs   = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
-     referenceFrame.validIDs(uu - 3 + 1 , vv - 3 + 1,:) = 1;
      
      pFar = pFar .*  referenceFrame.validIDs;
      pClose = pClose .*  referenceFrame.validIDs;
@@ -888,63 +952,116 @@ classdef DepthMap < handle
      %idnew_best_match;	%% depth in the new image
 	%alpha;  %% d(idnew_best_match) / d(disparity in pixel) == conputed inverse depth derived by the pixel-disparity.
     
-    dot0 = zeros(size(best_match_x,1),1);
-    dot2 = zeros(size(best_match_x,1) ,1);
-    idnew_best_match = zeros(size(best_match_x,1),1);
-    alpha = zeros(size(best_match_x,1) ,1);
-	XGrtY = (incx.*incx>incy.*incy);
+    dot0 = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    dot2 = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    idnew_best_match = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    alpha = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+	XGrtY = (incx.*incx)>(incy.*incy);
     YGrtX = ~XGrtY;
     XGrtY = XGrtY & referenceFrame.validIDs;
     YGrtX = YGrtX & referenceFrame.validIDs;
-	[x,y] = find(XGrtY);
+	
 		%oldX = obj.fxi*best_match_x(XGrtY)+obj.cxi;
 		%nominator = (oldX*referenceFrame.otherToThis_t(3) - referenceFrame.otherToThis_t(1));
-       
         
-        for i = 1: size(x,1)
+     oldX = XGrtY .* (obj.fxi.*bm_x + obj.cxi);   
+     oldY = YGrtX .* (obj.fyi.*bm_y + obj.cyi);
+     nominatorX = (oldX*referenceFrame.otherToThis_t(3)) - referenceFrame.otherToThis_t(1);
+     nominatorY = (oldY*referenceFrame.otherToThis_t(3)) - referenceFrame.otherToThis_t(2);
+     
+     [xid,yid] = find(XGrtY);
+        for i = 1: size(xid,1)
         
          
-        oldX = obj.fxi*best_match_x(i,:)+obj.cxi;
-		nominator = (oldX*referenceFrame.otherToThis_t(3) - referenceFrame.otherToThis_t(1));
-		dot0(i,:) = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3) * (referenceFrame.otherToThis_R(1,:))';
-		dot2(i,:) = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3) * (referenceFrame.otherToThis_R(3,:))';
-        idnew_best_match(i) = (dot0(i,:) - oldX*dot2(i,:)) / nominator;
+       
+		nom =  nominatorX(uu(i) - 3 + 1 , vv(i) - 3 + 1);
         
-        alpha (i,:)= incx(uu(i) - 3 + 1 , vv(i) - 3 + 1,:)*obj.fxi*(dot0(i,:)*referenceFrame.otherToThis_t(3) - dot2(i,:)*referenceFrame.otherToThis_t(1)) ./ (nominator*nominator);
+		dot0 = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3) * (referenceFrame.otherToThis_R(1,:))';
+		dot2 = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3) * (referenceFrame.otherToThis_R(3,:))';
+        idnew_best_match(uu(i) - 3 + 1 , vv(i) - 3 + 1,:) = (dot0 - oldX(uu(i) - 3 + 1 , vv(i) - 3 + 1)*dot2) /nom;
+        alpha (uu(i) - 3 + 1 , vv(i) - 3 + 1,:) = incx(uu(i) - 3 + 1 , vv(i) - 3 + 1,:)*obj.fxi*(dot0 * referenceFrame.otherToThis_t(3) - dot2 * referenceFrame.otherToThis_t(1)) ./ (nom*nom);
 
         
         
         end
-         [x,y] = find(YGrtX);
-        for i = 1: size(x,1)
-        oldY = obj.fyi*best_match_y(i,:)+obj.cyi;
+        [xid,yid] = find(YGrtX);
+        for i = 1: size(xid,1)
+        
 
-		nominator = (oldY*referenceFrame.otherToThis_t(3) - referenceFrame.otherToThis_t(2));
-		 dot1(i,:) = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3) * (referenceFrame.otherToThis_R(2,:))';
-		dot2(i,:) = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3)  * (referenceFrame.otherToThis_R(3,:))';
+		nom =  nominatorY(uu(i) - 3 + 1 , vv(i) - 3 + 1);
+		dot1 = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3) * (referenceFrame.otherToThis_R(2,:))';
+		dot2 = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3)  * (referenceFrame.otherToThis_R(3,:))';
 
-		idnew_best_match(i) = (dot1(i,:)  - oldY*dot2(i,:) ) / nominator;
-		alpha = incy(uu(i) - 3 + 1 , vv(i) - 3 + 1,:)*obj.fyi*(dot1(i,:)*referenceFrame.otherToThis_t(3)- dot2(i,:)*referenceFrame.otherToThis_t(2,:)) ./ (nominator*nominator);
-
+		idnew_best_match(uu(i) - 3 + 1 , vv(i) - 3 + 1,:) = (dot1  - oldY(uu(i) - 3 + 1 , vv(i) - 3 + 1)*dot2 ) / nom;
+		alpha(uu(i) - 3 + 1 , vv(i) - 3 + 1,:)  = incy(uu(i) - 3 + 1 , vv(i) - 3 + 1,:)*obj.fyi*(dot1 * referenceFrame.otherToThis_t(3)- dot2 * referenceFrame.otherToThis_t(2)) ./ (nom*nom);
+ 
        
 		
         end
 	
         referenceFrame.validIDs = referenceFrame.validIDs & ~(idnew_best_match < 0);
-	%{
-  
-	bestMatchIDs = ~(idnew_best_match < 0);
-    epxn = epxn(bestMatchIDs);
-    epyn = epyn(bestMatchIDs);
-	gradAlongLine = gradAlongLine(bestMatchIDs);
-        %}
+	
 
 	%% ================= calc var (in NEW image) ====================
+
+    photoDispError = 4.0 *  globalParams.cameraPixelNoise2 ./ (gradAlongLine + globalParams.DIVISION_EPS);
+    trackingErrorFac = 0.25*(1.0+referenceFrame.initialTrackedResidual);
+    
+    %[activeFrameGmag_0,activeFrameGdir_0] = imgradient(rgb2gray(obj.activeFrame.imgRGB));
+    activeImageGray = rgb2gray(obj.activeFrame.imgRGB);
+    filter = [0 -1 0; -1 0 1;0 1 0];
+    grad =  double(imfilter(activeImageGray,filter));
+    
+    
+    filter = [-1 0 1];
+     [w,h] = size(activeImageGray);
+    gx =  double(imfilter(activeImageGray,filter));
+    gy =  double(imfilter(activeImageGray,filter'));
+    gx = gx(3:w-3 , 3 : h - 3);
+    gy = gy(3:w-3 , 3 : h - 3);
+    
+    %{ 
+````%do we need this ? 
+    gradsInterpX =  interp2(x,y,gx,uu , vv , 'cubic');
+    gradsInterpY =  interp2(x,y,gy,uu , vv , 'cubic');
+    geoDispError = zeros(size(grad,1), size(grad,2));
+    
+     for i = 1:size(gradsInterp,1)
+        geoDispError(uu(i) - 3 + 1 , vv(i) - 3 + 1) = (gradsInterpX(i)*epxn(uu(i) - 3 + 1 , vv(i) - 3 + 1,:)  + gradsInterpY(i)*epyn(uu(i) - 3 + 1 , vv(i) - 3 + 1,:) ) + globalParams.DIVISION_EPS;
+    end
+   
+    %}
+   geoDispError = referenceFrame.validIDs .* ((gx .*  epxn  + gy.*epyn) + globalParams.DIVISION_EPS);
+   geoDispError = trackingErrorFac.*trackingErrorFac.*((gx.*gx) + (gy.*gy)) ./ (geoDispError.*geoDispError);
+   
+	%% final error consists of a small constant part (discretization error),
+	%% geometric and photometric error.
+	result_var = referenceFrame.validIDs .*(alpha.*alpha .* ((0.5).*sampleDist.*sampleDist +  geoDispError + photoDispError));	
+    
+    
+    result_idepth = referenceFrame.validIDs .*idnew_best_match;
+
+	result_eplLength = referenceFrame.validIDs .*eplLength;
+    
+    
+    
+    [zx,zy] = find(result_idepth ~= 0);
+    zz = result_idepth(result_idepth ~=0);
+    figure()
+    scatter3(zx./max(zx), zy./max(zy), zz);
+    
+    
+    
+    figure();
+    loc1 = [5,5,5];
+    pcshow([zy./max(zy),zx./max(zx),zz],'MarkerSize', 45);
+grid on
+xlim([loc1(1)-5, loc1(1)+4]);
+ylim([loc1(2)-5, loc1(2)+4]);
+zlim([loc1(3)-1, loc1(3)+20]);
+camorbit(0, -30);
 %{
-    photoDispError = 4.0 *  globalParams.cameraPixelNoise2 / (gradAlongLine + globalParams.DIVISION_EPS);
-
-	trackingErrorFac = 0.25*(1.0f+referenceFrame.initialTrackedResidual);
-
+	
 	%% calculate error from geometric noise (wrong camera pose / calibration)
 	Eigen::Vector2f gradsInterp = getInterpolatedElement42(activeKeyFrame->gradients(0), u, v, width);
 	float geoDispError = (gradsInterp[0]*epxn + gradsInterp[1]*epyn) + DIVISION_EPS;
@@ -959,8 +1076,8 @@ classdef DepthMap < handle
 
     
 	%% calculate error from photometric noise
-
-	%}
+%}
+	
          
 end
          function observeDepthRow(obj, yMin , yMax)
