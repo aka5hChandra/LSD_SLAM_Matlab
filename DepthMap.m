@@ -687,10 +687,10 @@ classdef DepthMap < handle
              ix = incx( referenceFrame.validIDs);
                 iy = incy( referenceFrame.validIDs);
                 [x , y] = meshgrid(1:obj.height,1 :obj.width );
-             val_cp_m2 =  interp2(x,y,referenceFrameForIntepolation,pF1-2.0*ix,pF2-2.0*iy, 'cubic');
-             val_cp_m1 = interp2(x,y,referenceFrameForIntepolation,pF1-ix,pF2-iy, 'cubic');
-             val_cp = interp2(x,y,referenceFrameForIntepolation,pF1,pF2, 'cubic');
-             val_cp_p1 = interp2(x,y,referenceFrameForIntepolation,pF1+ix,pF2+iy, 'cubic');
+             val_cp_m2 =  interp2(x,y,referenceFrameForIntepolation,pF2-2.0*iy, pF1-2.0*ix,'cubic');
+             val_cp_m1 = interp2(x,y,referenceFrameForIntepolation,pF2-iy,pF1-ix, 'cubic');
+             val_cp = interp2(x,y,referenceFrameForIntepolation,pF2, pF1,'cubic');
+             val_cp_p1 = interp2(x,y,referenceFrameForIntepolation,pF2+iy, pF1+ix,'cubic');
              val_cp_p2 = zeros(size(val_cp_p1,1),1);
              %{%
              
@@ -698,6 +698,9 @@ classdef DepthMap < handle
              
              
          %}
+        
+         
+         
               e1A = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
               e2A = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
               e3A = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
@@ -752,6 +755,9 @@ classdef DepthMap < handle
                     
                     uu = u(referenceFrame.validIDs);
                     vv = v(referenceFrame.validIDs);
+                    
+           
+                    
                      epxnRf = referenceFrame.validIDs .* (epxn.*rescaleFactor);
                 epynRf = referenceFrame.validIDs .* (epyn.*rescaleFactor);
                     
@@ -762,11 +768,39 @@ classdef DepthMap < handle
                 activeFrameForIntepolation = double(obj.activeFrame.imgGray);
                 
                 
-                realVal_p1 = interp2(x,y,activeFrameForIntepolation,uu + epxnRf, vv + epynRf, 'cubic');
-                realVal_m1 = interp2(x,y,activeFrameForIntepolation,uu - epxnRf, vv - epynRf, 'cubic');
-                realVal = interp2(x,y,activeFrameForIntepolation,uu,vv,'cubic') ; 
-                realVal_m2 = interp2(x,y,activeFrameForIntepolation,uu - epxnRf, vv - epynRf, 'cubic');
-                realVal_p2 = interp2(x,y,activeFrameForIntepolation,uu + epxnRf, vv + epynRf, 'cubic');
+                realVal_p1 = interp2(x,y,activeFrameForIntepolation,vv + epynRf, uu + epxnRf, 'cubic');
+                realVal_m1 = interp2(x,y,activeFrameForIntepolation,vv - epynRf, uu - epxnRf, 'cubic');
+                realVal = interp2(x,y,activeFrameForIntepolation,vv,uu,'cubic') ; 
+                realVal_m2 = interp2(x,y,activeFrameForIntepolation,vv - epynRf, uu - epxnRf, 'cubic');
+                realVal_p2 = interp2(x,y,activeFrameForIntepolation,vv + epynRf, uu + epxnRf, 'cubic');
+                
+                
+                
+         val_cp_m2_2  = zeros(size(pClose,1), size(pClose,2));
+         val_cp_m1_2 = zeros(size(pClose,1), size(pClose,2));
+         val_cp_2 = zeros(size(pClose,1), size(pClose,2));
+         val_cp_p1_2 = zeros(size(pClose,1), size(pClose,2));
+         val_cp_p2_2 = zeros(size(pClose,1), size(pClose,2));
+         
+         realVal_p1_2  = zeros(size(pClose,1), size(pClose,2));
+         realVal_m1_2 = zeros(size(pClose,1), size(pClose,2));
+         realVal_2 = zeros(size(pClose,1), size(pClose,2));
+         realVal_m2_2 = zeros(size(pClose,1), size(pClose,2));
+         realVal_p2_2 = zeros(size(pClose,1), size(pClose,2));
+         for i = 1 : size(val_cp,1)
+             val_cp_m2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_m2(i,1); 
+             val_cp_m1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_m1(i,1); 
+             val_cp_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp(i,1); 
+             val_cp_p1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_p1(i,1); 
+             val_cp_p2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_p2(i,1); 
+             
+             
+              realVal_p1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_p1(i,1); 
+             realVal_m1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_m1(i,1); 
+             realVal_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal(i,1); 
+             realVal_m2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_m2(i,1); 
+             realVal_p2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_p2(i,1); 
+         end
                    %{%
                    
                 
@@ -791,7 +825,7 @@ classdef DepthMap < handle
                     loopCounterAll = 0;
              while(any(iteratroID) | (loopCounterAll == 0))
 	
-             val_cp_p2(iteratroID) = interp2(x,y,referenceFrameForIntepolation,cpx(iteratroID)+2 * ix(iteratroID),cpy(iteratroID)+ 2 *iy(iteratroID), 'cubic');
+             val_cp_p2(iteratroID) = interp2(x,y,referenceFrameForIntepolation,cpy(iteratroID)+ 2 *iy(iteratroID),cpx(iteratroID)+2 * ix(iteratroID), 'cubic');
              %val_cp_p2(iteratroID) = 176.055;
               %%val_cp_p2(iteratroID) = 176.98;
               %val_cp_p2(iteratroID) =  177.27;
@@ -814,6 +848,7 @@ classdef DepthMap < handle
              
             %% do I have a new winner??
             %%if so: set.
+             bestMacthErrIds = false(size(iteratroID,1),1);
              bestMacthErrIds(iteratroID) = ee(iteratroID) < best_match_err(iteratroID);
 		if any(bestMacthErrIds)
 			%%put to second-best
@@ -831,12 +866,13 @@ classdef DepthMap < handle
 
 			best_match_x(bestMacthErrIds) = cpx(bestMacthErrIds);
 			best_match_y(bestMacthErrIds) = cpy(bestMacthErrIds);
+            bestWasLastLoop = false(size(val_cp_p1,1),size(val_cp_p1,2)) ;
 			bestWasLastLoop(bestMacthErrIds) = true;
 	
 		%% otherwise: the last might be the current winner, in which case i have to save these values.
             NotbestMacthErrIds = ~bestMacthErrIds;
             if any(NotbestMacthErrIds)
-                if any(bestWasLastLoop)
+                if any(bestWasLastLoop(NotbestMacthErrIds))
 			
 				best_match_errPost(NotbestMacthErrIds & bestWasLastLoop) = ee(NotbestMacthErrIds &  bestWasLastLoop);
 				best_match_DiffErrPost(NotbestMacthErrIds &  bestWasLastLoop) = e1A(NotbestMacthErrIds &  bestWasLastLoop).*e1B(NotbestMacthErrIds &  bestWasLastLoop) + e2A(NotbestMacthErrIds &  bestWasLastLoop).*e2B(NotbestMacthErrIds &  bestWasLastLoop) + e3A(NotbestMacthErrIds &  bestWasLastLoop).*e3B(NotbestMacthErrIds &  bestWasLastLoop) + e4A(NotbestMacthErrIds &  bestWasLastLoop).*e4B(NotbestMacthErrIds &  bestWasLastLoop) + e5A(NotbestMacthErrIds &  bestWasLastLoop).*e5B(NotbestMacthErrIds &  bestWasLastLoop);
@@ -845,7 +881,8 @@ classdef DepthMap < handle
 
 			%% collect second-best:
 			%% just take the best of all that are NOT equal to current best.
-                secondBestMatchIds  =  (ee < second_best_match_err) ;
+                secondBestMatchIds = false(size(iteratroID,1),1);
+                secondBestMatchIds(iteratroID)   =  (ee(iteratroID) < second_best_match_err(iteratroID)) ;
 			
 				second_best_match_err(NotbestMacthErrIds & secondBestMatchIds)=ee(NotbestMacthErrIds & secondBestMatchIds);
 				loopCSecond(NotbestMacthErrIds & secondBestMatchIds) = loopCounter(NotbestMacthErrIds &secondBestMatchIds);
