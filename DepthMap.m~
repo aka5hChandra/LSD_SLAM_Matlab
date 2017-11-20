@@ -40,7 +40,7 @@ classdef DepthMap < handle
             obj.activeFrame = new_frame;
             
             intialVar = ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2)) * globalParams.VAR_GT_INIT_INITIAL;
-            depth = new_frame.imgZ;%ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));% 
+            depth = ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));% new_frame.imgZ;%
             obj.depthHypothesis = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar);
             
             %%using this avoid nans
@@ -684,22 +684,76 @@ classdef DepthMap < handle
              pF1 = pF1( referenceFrame.validIDs);
              pF2 = pF2( referenceFrame.validIDs);
              
+             
+                     epxnRf = referenceFrame.validIDs .* (epxn.*rescaleFactor);
+                epynRf = referenceFrame.validIDs .* (epyn.*rescaleFactor);
+                    
+                    epxnRf = epxnRf(referenceFrame.validIDs);
+                    epynRf = epynRf(referenceFrame.validIDs);
+             
+                uu = u(referenceFrame.validIDs);
+                    vv = v(referenceFrame.validIDs);
+             
              ix = incx( referenceFrame.validIDs);
                 iy = incy( referenceFrame.validIDs);
                 [x , y] = meshgrid(1:obj.height,1 :obj.width );
-             val_cp_m2 =  interp2(x,y,referenceFrameForIntepolation,pF1-2.0*ix,pF2-2.0*iy, 'cubic');
-             val_cp_m1 = interp2(x,y,referenceFrameForIntepolation,pF1-ix,pF2-iy, 'cubic');
-             val_cp = interp2(x,y,referenceFrameForIntepolation,pF1,pF2, 'cubic');
-             val_cp_p1 = interp2(x,y,referenceFrameForIntepolation,pF1+ix,pF2+iy, 'cubic');
+             val_cp_m2 =  interp2(x,y,referenceFrameForIntepolation,pF2-2.0*iy, pF1-2.0*ix,'cubic');
+             val_cp_m1 = interp2(x,y,referenceFrameForIntepolation,pF2-iy,pF1-ix, 'cubic');
+             val_cp = interp2(x,y,referenceFrameForIntepolation,pF2, pF1,'cubic');
+             val_cp_p1 = interp2(x,y,referenceFrameForIntepolation,pF2+iy, pF1+ix,'cubic');
              val_cp_p2 = zeros(size(val_cp_p1,1),1);
-             %{%
              
-            
+                 activeFrameForIntepolation = double(obj.activeFrame.imgGray);
+                
+                
+                realVal_p1 = interp2(x,y,activeFrameForIntepolation,vv + epynRf, uu + epxnRf, 'cubic');
+                realVal_m1 = interp2(x,y,activeFrameForIntepolation,vv - epynRf, uu - epxnRf, 'cubic');
+                realVal = interp2(x,y,activeFrameForIntepolation,vv,uu,'cubic') ; 
+                realVal_m2 = interp2(x,y,activeFrameForIntepolation,vv - epynRf, uu - epxnRf, 'cubic');
+                realVal_p2 = interp2(x,y,activeFrameForIntepolation,vv + epynRf, uu + epxnRf, 'cubic');
+                
              
-             
-         %}
-        
+                
+         val_cp_m2_2  = zeros(size(pClose,1), size(pClose,2));
+         val_cp_m1_2 = zeros(size(pClose,1), size(pClose,2));
+         val_cp_2 = zeros(size(pClose,1), size(pClose,2));
+         val_cp_p1_2 = zeros(size(pClose,1), size(pClose,2));
+         val_cp_p2_2 = zeros(size(pClose,1), size(pClose,2));
          
+         realVal_p1_2  = zeros(size(pClose,1), size(pClose,2));
+         realVal_m1_2 = zeros(size(pClose,1), size(pClose,2));
+         realVal_2 = zeros(size(pClose,1), size(pClose,2));
+         realVal_m2_2 = zeros(size(pClose,1), size(pClose,2));
+         realVal_p2_2 = zeros(size(pClose,1), size(pClose,2));
+         for i = 1 : size(val_cp,1)
+             val_cp_m2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_m2(i,1); 
+             val_cp_m1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_m1(i,1); 
+             val_cp_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp(i,1); 
+             val_cp_p1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_p1(i,1); 
+             val_cp_p2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_p2(i,1); 
+             
+             
+             realVal_p1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_p1(i,1); 
+             realVal_m1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_m1(i,1); 
+             realVal_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal(i,1); 
+             realVal_m2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_m2(i,1); 
+             realVal_p2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_p2(i,1); 
+         end
+         
+         %{
+            val_cp_m2 = val_cp_m2_2; 
+            val_cp_m1 = val_cp_m1_2; 
+            val_cp = val_cp_2; 
+            val_cp_p1 = val_cp_p1_2; 
+            val_cp_p2= val_cp_p2_2; 
+            
+            
+            realVal_p1 = realVal_p1_2; 
+            realVal_m1= realVal_m1_2; 
+            realVal = realVal_2; 
+             realVal_m2 = realVal_m2_2; 
+             realVal_p2 = realVal_p2_2;
+         %}
          
               e1A = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
               e2A = zeros(size(val_cp_p1,1),size(val_cp_p1,2));
@@ -737,7 +791,7 @@ classdef DepthMap < handle
                     cpy = pFar(:,:,2);
                     cpx = cpx(referenceFrame.validIDs);
                     cpy = cpy(referenceFrame.validIDs);
-                    bestMacthErrIds = false(size(cpy,1),1);
+                    bestMacthErrIds = false(size(cpy,1),size(cpy,2));
                     
                     
                     
@@ -753,54 +807,13 @@ classdef DepthMap < handle
                     realVal_p2 = realVal_p2(referenceFrame.validIDs);
                %}
                     
-                    uu = u(referenceFrame.validIDs);
-                    vv = v(referenceFrame.validIDs);
+                    
                     
            
                     
-                     epxnRf = referenceFrame.validIDs .* (epxn.*rescaleFactor);
-                epynRf = referenceFrame.validIDs .* (epyn.*rescaleFactor);
-                    
-                    epxnRf = epxnRf(referenceFrame.validIDs);
-                    epynRf = epynRf(referenceFrame.validIDs);
                     
                      
-                activeFrameForIntepolation = double(obj.activeFrame.imgGray);
-                
-                
-                realVal_p1 = interp2(x,y,activeFrameForIntepolation,vv + epxnRf, vv + epynRf, 'cubic');
-                realVal_m1 = interp2(x,y,activeFrameForIntepolation,vv - epxnRf, vv - epynRf, 'cubic');
-                realVal = interp2(x,y,activeFrameForIntepolation,uu,vv,'cubic') ; 
-                realVal_m2 = interp2(x,y,activeFrameForIntepolation,uu - epxnRf, vv - epynRf, 'cubic');
-                realVal_p2 = interp2(x,y,activeFrameForIntepolation,uu + epxnRf, vv + epynRf, 'cubic');
-                
-                
-                
-         val_cp_m2_2  = zeros(size(pClose,1), size(pClose,2));
-         val_cp_m1_2 = zeros(size(pClose,1), size(pClose,2));
-         val_cp_2 = zeros(size(pClose,1), size(pClose,2));
-         val_cp_p1_2 = zeros(size(pClose,1), size(pClose,2));
-         val_cp_p2_2 = zeros(size(pClose,1), size(pClose,2));
-         
-         realVal_p1_2  = zeros(size(pClose,1), size(pClose,2));
-         realVal_m1_2 = zeros(size(pClose,1), size(pClose,2));
-         realVal_2 = zeros(size(pClose,1), size(pClose,2));
-         realVal_m2_2 = zeros(size(pClose,1), size(pClose,2));
-         realVal_p2_2 = zeros(size(pClose,1), size(pClose,2));
-         for i = 1 : size(val_cp,1)
-             val_cp_m2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_m2(i,1); 
-             val_cp_m1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_m1(i,1); 
-             val_cp_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp(i,1); 
-             val_cp_p1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_p1(i,1); 
-             val_cp_p2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = val_cp_p2(i,1); 
-             
-             
-              realVal_p1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_p1(i,1); 
-             realVal_m1_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_m1(i,1); 
-             realVal_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal(i,1); 
-             realVal_m2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_m2(i,1); 
-             realVal_p2_2(uu(i) - 3 + 1 , vv(i) - 3 + 1) = realVal_p2(i,1); 
-         end
+            
                    %{%
                    
                 
@@ -825,7 +838,7 @@ classdef DepthMap < handle
                     loopCounterAll = 0;
              while(any(iteratroID) | (loopCounterAll == 0))
 	
-             val_cp_p2(iteratroID) = interp2(x,y,referenceFrameForIntepolation,cpx(iteratroID)+2 * ix(iteratroID),cpy(iteratroID)+ 2 *iy(iteratroID), 'cubic');
+             val_cp_p2(iteratroID) = interp2(x,y,referenceFrameForIntepolation,cpy(iteratroID)+ 2 *iy(iteratroID),cpx(iteratroID)+2 * ix(iteratroID), 'cubic');
              %val_cp_p2(iteratroID) = 176.055;
               %%val_cp_p2(iteratroID) = 176.98;
               %val_cp_p2(iteratroID) =  177.27;
@@ -848,7 +861,7 @@ classdef DepthMap < handle
              
             %% do I have a new winner??
             %%if so: set.
-             bestMacthErrIds = false(size(iteratroID,1),1);
+             bestMacthErrIds = false(size(iteratroID,1),size(iteratroID,2));
              bestMacthErrIds(iteratroID) = ee(iteratroID) < best_match_err(iteratroID);
 		if any(bestMacthErrIds)
 			%%put to second-best
@@ -944,7 +957,7 @@ classdef DepthMap < handle
     bm_x = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
     bm_y = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
     for i = 1 : size(validIDs)
-        %if (validIDs(i))
+        if (validIDs(i))
      newValidIDs(uu(i) - 3 + 1 , vv(i) - 3 + 1) = 1;
     
      tmp = realVal_p2(i ,1) - realVal_p1(i,1);
@@ -962,7 +975,7 @@ classdef DepthMap < handle
      bm_error(uu(i) - 3 + 1 , vv(i) - 3 + 1) = best_match_err(i,1);      
      bm_x(uu(i) - 3 + 1 , vv(i) - 3 + 1) = best_match_x(i,1);
      bm_y(uu(i) - 3 + 1 , vv(i) - 3 + 1) = best_match_y(i,1);
-       % end
+        end
     end
     close all;
     imshow(newValidIDs)
@@ -989,8 +1002,8 @@ classdef DepthMap < handle
      %idnew_best_match;	%% depth in the new image
 	%alpha;  %% d(idnew_best_match) / d(disparity in pixel) == conputed inverse depth derived by the pixel-disparity.
     
-    dot0 = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
-    dot2 = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    dot0_w = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
+    dot2_w = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
     idnew_best_match = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
     alpha = zeros(size(referenceFrame.validIDs,1),size(referenceFrame.validIDs,2));
 	XGrtY = (incx.*incx)>(incy.*incy);
@@ -1005,18 +1018,23 @@ classdef DepthMap < handle
      oldY = YGrtX .* (obj.fyi.*bm_y + obj.cyi);
      nominatorX = (oldX*referenceFrame.otherToThis_t(3)) - referenceFrame.otherToThis_t(1);
      nominatorY = (oldY*referenceFrame.otherToThis_t(3)) - referenceFrame.otherToThis_t(2);
+  
      
-     [xid,yid] = find(XGrtY);
-        for i = 1: size(xid,1)
+     [uu,vv] = find(XGrtY);
+        for i = 1: size(uu,1)
         
          
        
-		nom =  nominatorX(uu(i) - 3 + 1 , vv(i) - 3 + 1);
+		nom =  nominatorX(uu(i) , vv(i) );
         
-		dot0 = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3) * (referenceFrame.otherToThis_R(1,:))';
-		dot2 = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3) * (referenceFrame.otherToThis_R(3,:))';
-        idnew_best_match(uu(i) - 3 + 1 , vv(i) - 3 + 1,:) = (dot0 - oldX(uu(i) - 3 + 1 , vv(i) - 3 + 1)*dot2) /nom;
-        alpha (uu(i) - 3 + 1 , vv(i) - 3 + 1,:) = incx(uu(i) - 3 + 1 , vv(i) - 3 + 1,:)*obj.fxi*(dot0 * referenceFrame.otherToThis_t(3) - dot2 * referenceFrame.otherToThis_t(1)) ./ (nom*nom);
+		dot0 = reshape(KinvP(uu(i)  , vv(i),:),1,3) * (referenceFrame.otherToThis_R(1,:))';
+		dot2 = reshape(KinvP(uu(i)  , vv(i),:),1,3) * (referenceFrame.otherToThis_R(3,:))';
+        
+        dot0_w(uu(i)  , vv(i) ) = dot0;
+        dot0_w(uu(i)  , vv(i) ) = dot0;
+        
+        idnew_best_match(uu(i)  , vv(i) ,:) = (dot0 - oldX(uu(i) , vv(i) )*dot2) /nom;
+        alpha (uu(i)  , vv(i) ,:) = incx(uu(i)  , vv(i) ,:)*obj.fxi*(dot0 * referenceFrame.otherToThis_t(3) - dot2 * referenceFrame.otherToThis_t(1)) ./ (nom*nom);
 
         
         
@@ -1025,12 +1043,12 @@ classdef DepthMap < handle
         for i = 1: size(xid,1)
         
 
-		nom =  nominatorY(uu(i) - 3 + 1 , vv(i) - 3 + 1);
-		dot1 = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3) * (referenceFrame.otherToThis_R(2,:))';
-		dot2 = reshape(KinvP(uu(i) - 3 + 1 , vv(i) - 3 + 1,:),1,3)  * (referenceFrame.otherToThis_R(3,:))';
+		nom =  nominatorY(uu(i)  , vv(i) );
+		dot1 = reshape(KinvP(uu(i)  , vv(i) ,:),1,3) * (referenceFrame.otherToThis_R(2,:))';
+		dot2 = reshape(KinvP(uu(i)  , vv(i) ,:),1,3)  * (referenceFrame.otherToThis_R(3,:))';
 
-		idnew_best_match(uu(i) - 3 + 1 , vv(i) - 3 + 1,:) = (dot1  - oldY(uu(i) - 3 + 1 , vv(i) - 3 + 1)*dot2 ) / nom;
-		alpha(uu(i) - 3 + 1 , vv(i) - 3 + 1,:)  = incy(uu(i) - 3 + 1 , vv(i) - 3 + 1,:)*obj.fyi*(dot1 * referenceFrame.otherToThis_t(3)- dot2 * referenceFrame.otherToThis_t(2)) ./ (nom*nom);
+		idnew_best_match(uu(i) , vv(i) ,:) = (dot1  - oldY(uu(i)  , vv(i) )*dot2 ) / nom;
+		alpha(uu(i)  , vv(i) ,:)  = incy(uu(i)  , vv(i) ,:)*obj.fyi*(dot1 * referenceFrame.otherToThis_t(3)- dot2 * referenceFrame.otherToThis_t(2)) ./ (nom*nom);
  
        
 		
@@ -1084,19 +1102,25 @@ classdef DepthMap < handle
     
     [zx,zy] = find(result_idepth ~= 0);
     zz = result_idepth(result_idepth ~=0);
-    figure()
-    scatter3(zx./max(zx), zy./max(zy), zz);
+    %figure()
+    %scatter3(zx./zz, zy./zz, zz);
     
     
-    
+    close all;
     figure();
-    loc1 = [5,5,5];
-    pcshow([zy./max(zy),zx./max(zx),zz],'MarkerSize', 45);
-grid on
-xlim([loc1(1)-5, loc1(1)+4]);
-ylim([loc1(2)-5, loc1(2)+4]);
-zlim([loc1(3)-1, loc1(3)+20]);
-camorbit(0, -30);
+    scale = 50;
+    camPos = referenceFrame.thisToOther_t;
+    camPos(3) = camPos(3) * scale;
+    
+    plotCamera('Location','Orientation',referenceFrame.thisToOther_R,'Opacity',0);
+    hold on
+    
+    pcshow([zx,zy,zz * scale],'MarkerSize', 45);
+    grid on
+%xlim([loc1(1)-5, loc1(1)+4]);
+%ylim([loc1(2)-5, loc1(2)+4]);
+%zlim([loc1(3)-1, loc1(3)+20]);
+%camorbit(0, -30);
 %{
 	
 	%% calculate error from geometric noise (wrong camera pose / calibration)
