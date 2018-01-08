@@ -3,10 +3,12 @@ classdef DepthMap < handle
         %intresnic camera parameters
         fx,fy,cx,cy,fxi,fyi,cxi,cyi;
         width, height;
-        activeFrame;
+        activeKeyFrame;
         newest_referenceFrame;
         oldest_referenceFrame;
-        depthHypothesis;
+        %depthHypothesis;
+        currentDepthMap;
+        otherDepthMap;
         K;
         priorDepth;
     end
@@ -27,36 +29,38 @@ classdef DepthMap < handle
             obj.width = w;
             obj.height = h;
             
- 
-            
+             intialVar = ones(w,h) * globalParams.VAR_GT_INIT_INITIAL;
+            obj.otherDepthMap = DepthMapPixelHypothesis(zeros(w,h) , zeros(w,h), intialVar, intialVar);
+          
         end
         
         function initializeRandomly(obj, new_frame)
-            obj.activeFrame = new_frame;
+            obj.activeKeyFrame = new_frame;
             %populate random / rgbd depthmap hypothis 
         end
         
         function initializeFromGTDepth(obj, new_frame)
-            obj.activeFrame = new_frame;
+            obj.activeKeyFrame = new_frame;
             
             intialVar = ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2)) * globalParams.VAR_GT_INIT_INITIAL;
-            depth = ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));% new_frame.imgZ;%
-            obj.depthHypothesis = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar);
-            
+            depth =  new_frame.imgZ;%ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));
+            % obj.depthHypothesis = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar);
+            obj.currentDepthMap = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar);
+            obj.currentDepthMap.validity_counter(new_frame.imgZ > 0) = 20;
             %%using this avoid nans
-            obj.priorDepth = ones(size(obj.depthHypothesis.idepth,1) , size(obj.depthHypothesis.idepth,2));% obj.depthHypothesis.idepth; %
-            obj.depthHypothesis.visualize(0);
+            obj.priorDepth =  obj.currentDepthMap.idepth; %ones(size(obj.depthHypothesis.idepth,1) , size(obj.depthHypothesis.idepth,2));%
+            obj.currentDepthMap.visualize(0);
         end
         
         function updateKeyframe(obj, referanceFrames)
             %%%for now previous frame is active frame
-            if size(obj.activeFrame,1) == 0
-               obj.activeFrame = referanceFrames;
+            if size(obj.activeKeyFrame,1) == 0
+               obj.activeKeyFrame = referanceFrames;
             end
             
-            referanceFrames.prepareForStereoWith(obj.activeFrame, inv(obj.activeFrame.getScaledCamToWorld()), obj.K,0);
+            referanceFrames.prepareForStereoWith(obj.activeKeyFrame, inv(obj.activeKeyFrame.getScaledCamToWorld()), obj.K,0);
             obj.newest_referenceFrame = referanceFrames;
-            %%obj.activeFrame = referanceFrames;
+            %%obj.activeKeyFrame = referanceFrames;
         end
         %{
         function [flag,pepx,pepy] = makeAndCheckEPL(obj,x , y , ref)
@@ -75,8 +79,8 @@ classdef DepthMap < handle
             end
 
             %% ===== check epl-grad magnitude ======
-            gx =  obj.activeFrame.image(x + 1,y) - obj.activeFrame.image(x - 1,y) ;
-            gy =  obj.activeFrame.image(x, y + 1) - obj.activeFrame.image(x,y - 1) ;
+            gx =  obj.activeKeyFrame.image(x + 1,y) - obj.activeKeyFrame.image(x - 1,y) ;
+            gy =  obj.activeKeyFrame.image(x, y + 1) - obj.activeKeyFrame.image(x,y - 1) ;
             eplGradSquared = gx * epx + gy * epy;
             eplGradSquared = (eplGradSquared*eplGradSquared) / eplLengthSquared;	
 
@@ -101,6 +105,69 @@ classdef DepthMap < handle
             
         end
         %}
+        
+        function observeDepthUpdate(obj,x , y , referenceFrame)
+            
+             [flag,pepx,pepy, x, y ] = makeAndCheckEPLMat(obj,x , y , referenceFrame);
+            [result_idepth, result_var, result_eplLength] = obj.doLineStereo(x,y,pepx,pepy,referenceFrame);
+            
+            
+            
+		% do textbook ekf update:
+		%increase var by a little (prediction-uncertainty);
+         id_var =  obj.currentDepthMap.idepth_var(3:obj.width-3 , 3 : obj.height - 3) .* globalParams.SUCC_VAR_INC_FAC;
+         % update var with observation
+		 w = referenceFrame.validIDs .* (result_var ./ (result_var + id_var));
+
+         
+		 new_idepth = (1-w).*result_idepth + w.*obj.currentDepthMap.idepth(3:obj.width-3 , 3 : obj.height - 3) ;
+         depthError = abs(obj.currentDepthMap.idepth(3:obj.width-3 , 3 : obj.height - 3) - result_idepth);
+         
+         
+         
+          obj.currentDepthMap.idepth = zeros(obj.width, obj.height);
+          obj.currentDepthMap.idepth_smoothed = zeros(obj.width, obj.height);
+         
+		obj.currentDepthMap.idepth(3:obj.width-3 , 3 : obj.height - 3)  = (new_idepth);
+        obj.currentDepthMap.idepth_smoothed(3:obj.width-3 , 3 : obj.height - 3)  = (new_idepth);
+        obj.currentDepthMap.isValid  = zeros(obj.width, obj.height);
+        obj.currentDepthMap.isValid(3:obj.width-3 , 3 : obj.height - 3)  = referenceFrame.validIDs;
+        
+       % variance can only decrease from observation; never increase.
+		id_var = id_var .* w;
+        mask = zeros(size(id_var));
+        mask(id_var < obj.currentDepthMap.idepth_var(3:obj.width-3 , 3 : obj.height - 3)) = 1;
+		obj.currentDepthMap.idepth_var(3:obj.width-3 , 3 : obj.height - 3)=mask.*id_var;
+		
+            
+            
+              [zx,zy] = find(new_idepth ~= 0);
+    zz = result_idepth(new_idepth ~=0);
+    %figure()
+    %scatter3(zx./zz, zy./zz, zz);
+    
+    
+    close all;
+    figure();
+    imshow(referenceFrame.imgRGB)
+    figure ; imshow(log(result_var+1))
+    figure();
+    scale = 50;
+   
+     camPos = (referenceFrame.thisToOther_t);
+    camPos(3) = camPos(3) * scale;
+    plotCamera('Location',camPos,'Orientation',referenceFrame.thisToOther_R,'Opacity',0);
+    hold on
+    
+    pcshow([zx,zy,zz * scale],'MarkerSize', 45);
+    grid on
+    
+    pDepth = obj.priorDepth(3:obj.width-3 , 3 : obj.height - 3);
+    pDepth =  referenceFrame.validIDs .* pDepth;
+
+
+        end
+        
          function [flag,pepx,pepy, x, y ] = makeAndCheckEPLMat(obj,x , y , ref)
           %%%replace with matrix maniuplation 
             %x = reshape(x , [] , 1);
@@ -149,7 +216,7 @@ classdef DepthMap < handle
             end
             %}
             %% ===== check epl-grad magnitude ======
-            activeImageGray = double(obj.activeFrame.imgGray);
+            activeImageGray = double(obj.activeKeyFrame.imgGray);
             [w,h] = size(activeImageGray);
             %activeImageGray = activeImageGray(3:w-3 , 3 :h-3);
             filter = [-1 0 1];
@@ -159,8 +226,8 @@ classdef DepthMap < handle
             gx = gx(3:w-3 , 3 : h - 3);
             gy = gy(3:w-3 , 3 : h - 3);
             %{
-            gx =  obj.activeFrame.image(x + 1,y) - obj.activeFrame.image(x - 1,y) ;
-            gy =  obj.activeFrame.image(x, y + 1) - obj.activeFrame.image(x,y - 1) ;
+            gx =  obj.activeKeyFrame.image(x + 1,y) - obj.activeKeyFrame.image(x - 1,y) ;
+            gy =  obj.activeKeyFrame.image(x, y + 1) - obj.activeKeyFrame.image(x,y - 1) ;
             %}
             eplGradSquared = (gx .* epx) + (gy .* epy);
             eplGradSquared = (eplGradSquared.*eplGradSquared)./ eplLengthSquared;	
@@ -242,10 +309,216 @@ classdef DepthMap < handle
             prior_idepth = 0.5;
             max_idepth = 1;
             %}
-            obj.doLineStereo(x,y,pepx,pepy,ref)
+            %obj.doLineStereo(x,y,pepx,pepy,ref)
+         end
+         
+         function flag = isValid(obj) 
+             flag =  (obj.activeKeyFrame ~=0);
+         end
+         
+         function createKeyFrame(obj,   new_keyframe)
+             assert(obj.isValid())
+             assert(size(new_keyframe,1) ~= 0)
+             assert(new_keyframe.hasTrackingParent());
+             
+             
+             oldToNew_SE3 = inv(new_keyframe.pose.thisToParent_raw);
+             obj.propagateDepth(new_keyframe);
+             
+             
+             
+             
+             
+             obj.activeKeyFrame = new_keyframe;
+             
+             %regularizeDepthMap
+             % regularizeDepthMapFillHoles
+             %regularizeDepthMap
+             
+             %make mean inverse depth be one.
+             sumIdepth=sum(sum(obj.currentDepthMap.idepth_smoothed(obj.currentDepthMap.isValid == 1)));
+             numIdepth = sum(sum(obj.currentDepthMap.isValid == 1));
+	
+             rescaleFactor = numIdepth / sumIdepth;
+                rescaleFactor2 = rescaleFactor*rescaleFactor;
+		obj.currentDepthMap.idepth = obj.currentDepthMap.idepth * rescaleFactor;
+		obj.currentDepthMap.idepth_smoothed = obj.currentDepthMap.idepth_smoothed * rescaleFactor;
+		obj.currentDepthMap.idepth_var = obj.currentDepthMap.idepth_var * rescaleFactor2;
+		obj.currentDepthMap.idepth_var_smoothed = obj.currentDepthMap.idepth_var_smoothed * rescaleFactor2;
+	
+	obj.activeKeyFrame.pose.thisToParent_raw = inv(oldToNew_SE3);%sim3FromSE3(oldToNew_SE3.inverse(), rescaleFactor);
+	%obj.activeKeyFrame.pose.invalidateCache();
+
+	% Update depth in keyframe
+
+	obj.activeKeyFrame.setDepth(obj.currentDepthMap);
+	
+           
+             
+         end
+         
+         function propagateDepth(obj,new_keyframe)
+             %wipe depthmap
+             obj.otherDepthMap.isValid(:,:) = false;
+             obj.otherDepthMap.blackListed(:,:) = 0;
+             
+             oldToNew_SE3 = inv(new_keyframe.pose.thisToParent_raw);
+             trafoInv_t = oldToNew_SE3(1:3,4);
+             trafoInv_R = oldToNew_SE3(1:3,1:3);
+             
+               activeKFImageData = obj.activeKeyFrame.imgGray;
+             %change it to max gradient 
+             
+             trackingWasGood = 1;
+             %trackingWasGood = new_keyframe.getTrackingParent() == activeKeyFrame ? new_keyframe.refPixelWasGoodNoCreate() : 0;
+
+             
+                filter = [-1 0 1];
+            [w,h] = size(activeKFImageData);
+             gx =  double(imfilter(activeKFImageData,filter));
+             newKFMaxGrad =  gx;%new_keyframe.maxGradients;
+             newKFImageData = new_keyframe.imgGray;
+             
+             [xx , yy] = meshgrid(1:obj.height,1 :obj.width );
+             
+             % go through all pixels of OLD image, propagating forwards.
+            for y= 1:obj.height
+                for x= 1: obj.width
+                    %source = obj.currentDepthMap(x,y);
+                    if(~obj.currentDepthMap.isValid(x,y))
+                    continue;
+                    end
+                   pn = trafoInv_R * [x*obj.fxi + obj.cyi,y*obj.fyi + obj.cxi,1.0]' / obj.currentDepthMap.idepth_smoothed(x,y) + trafoInv_t;
+
+                  new_idepth = 1.0 / pn(3);
+
+                  u_new = pn(1)*new_idepth*obj.fx + obj.cy;
+                  v_new = pn(2)*new_idepth*obj.fy + obj.cx;
+                  
+                  if(~(u_new > 2.1 && v_new > 2.1 && u_new < obj.width-3.1 && v_new < obj.height-3.1))
+                
+                    continue;
+                  end
+
+                 %newIDX = int32(u_new+0.5) + (int32(v_new+0.5))*obj.width
+                 newIDX_X = int32(u_new+0.5);
+                 newIDX_y = int32(v_new+0.5);
+                
+                destAbsGrad = newKFMaxGrad(newIDX_X,newIDX_y);
+                
+                if(trackingWasGood ~= 0)
+                    
+                else
+                    
+                     sourceColor = activeKFImageData(x , y);
+                     %destColor = getInterpolatedElement(newKFImageData, u_new, v_new, width);
+                     
+                     destColor = interp2(xx,yy,newKFImageData,u_new,v_new, 'cubic');
+
+        			 residual = destColor - sourceColor;
+    
+
+                    if(residual*residual / (globalParams.MAX_DIFF_CONSTANT + globalParams.MAX_DIFF_GRAD_MULT*destAbsGrad*destAbsGrad) > 1.0 || destAbsGrad <globalParams.MIN_ABS_GRAD_DECREASE)
+				
+    					continue;
+        
+                    end
+                end
+                
+             %targetBest = obj.otherDepthMap(newIDX_X,newIDX_y);
+
+			%large idepth = point is near = large increase in variance.
+			%small idepth = point is far = small increase in variance.
+			idepth_ratio_4 = new_idepth / obj.currentDepthMap.idepth_smoothed(newIDX_X,newIDX_y);
+			idepth_ratio_4 = idepth_ratio_4 * idepth_ratio_4;
+			idepth_ratio_4 = idepth_ratio_4 * idepth_ratio_4;
+
+			 new_var =idepth_ratio_4*  obj.currentDepthMap.idepth_var(newIDX_X,newIDX_y);
+             
+             
+             
+             
+             % check for occlusion
+				
+			if( obj.otherDepthMap.isValid(newIDX_X,newIDX_y))
+				%if they occlude one another, one gets removed.
+				 diff = obj.otherDepthMap.idepth(newIDX_X,newIDX_y) - new_idepth;
+				if(globalParams.DIFF_FAC_PROP_MERGE * diff * diff > new_var + obj.otherDepthMap.idepth_var(newIDX_X,newIDX_y) )
+                    if(new_idepth < obj.otherDepthMap.idepth(newIDX_X,newIDX_y))
+						continue;
+                    else
+						obj.otherDepthMap.isValid(newIDX_X,newIDX_y) = false;
+                    end
+					
+                end
+            end
+
+             
+          if( obj.otherDepthMap.isValid(newIDX_X,newIDX_y))
+			
+                        
+                        obj.otherDepthMap.idepth(newIDX_X,newIDX_y) = new_idepth;
+                        obj.otherDepthMap.idepth_var(newIDX_X,newIDX_y) = new_var;
+                        
+                        obj.otherDepthMap.idepth_smoothed(newIDX_X,newIDX_y) = new_idepth;
+                        obj.otherDepthMap.idepth_var_smoothed(newIDX_X,newIDX_y) = new_var;
+                        
+                          obj.otherDepthMap.isValid(newIDX_X,newIDX_y) = true;
+                        obj.otherDepthMap.blackListed (newIDX_X,newIDX_y)= 0;
+                        
+                        
+                         obj.otherDepthMap.validity_counter(newIDX_X,newIDX_y)= obj.currentDepthMap.validity_counter(x,y);
+                        
+
+			
+			else
+			
+				% merge idepth ekf-style
+				 w = new_var / (obj.otherDepthMap.idepth_var(newIDX_X,newIDX_y) + new_var);
+				 merged_new_idepth = w* obj.otherDepthMap.idepth_var(newIDX_X,newIDX_y) + (1.0-w)*new_idepth;
+
+				% merge validity
+				 merged_validity = obj.currentDepthMap.validity_counter(x,y)+ obj.otherDepthMap.validity_counter(newIDX_X,newIDX_y);
+				if(merged_validity > globalParams.VALIDITY_COUNTER_MAX+(globalParams.VALIDITY_COUNTER_MAX_VARIABLE))
+					merged_validity = globalParams.VALIDITY_COUNTER_MAX+(globalParams.VALIDITY_COUNTER_MAX_VARIABLE);
+                end
+                
+                    curVar = obj.otherDepthMap.idepth_var(newIDX_X,newIDX_y) ;
+                    mergedVar = 1.0/(1.0/curVar + 1.0/new_var);
+                        obj.otherDepthMap.idepth(newIDX_X,newIDX_y) = merged_new_idepth;
+                        obj.otherDepthMap.idepth_var(newIDX_X,newIDX_y) = mergedVar;
+                        
+                        obj.otherDepthMap.idepth_smoothed(newIDX_X,newIDX_y) = merged_new_idepth;
+                        obj.otherDepthMap.idepth_var_smoothed(newIDX_X,newIDX_y) = mergedVar;
+                        
+                          obj.otherDepthMap.isValid(newIDX_X,newIDX_y) = true;
+                        obj.otherDepthMap.blackListed (newIDX_X,newIDX_y)= 0;
+                        
+                        
+                         obj.otherDepthMap.validity_counter(newIDX_X,newIDX_y)=merged_validity;
+                      
+				
+          end
+            
+
+                end
+            end
+            
+            %get rid of this 
+            obj.otherDepthMap.idepth_smoothed(isnan(obj.otherDepthMap.idepth_smoothed)) = 0;
+            obj.otherDepthMap.idepth(isnan(obj.otherDepthMap.idepth)) = 0;
+            
+            
+            obj.otherDepthMap.idepth_var_smoothed(isnan(obj.otherDepthMap.idepth_var_smoothed)) = 0;
+            obj.otherDepthMap.idepth_var(isnan(obj.otherDepthMap.idepth_var)) = 0;
+            
+            
+              temp = obj.currentDepthMap;
+            obj.currentDepthMap = obj.otherDepthMap;
+            obj.otherDepthMap = temp;
          end
         
-         function [flag] = doLineStereo(obj,u,v,epxn,epyn,referenceFrame)
+         function [result_idepth, result_var, result_eplLength] = doLineStereo(obj,u,v,epxn,epyn,referenceFrame)
              
               
           %{
@@ -392,7 +665,7 @@ classdef DepthMap < handle
                
                 %{
                  [x , y] = meshgrid(1:obj.height,1 :obj.width );
-                activeFrameForIntepolation = im2double(obj.activeFrame.imgGray);
+                activeKeyFrameForIntepolation = im2double(obj.activeKeyFrame.imgGray);
                 
                  epxnRf = referenceFrame.validIDs .* (epxn.*rescaleFactor);
                 epynRf = referenceFrame.validIDs .* (epyn.*rescaleFactor);
@@ -407,9 +680,9 @@ classdef DepthMap < handle
             
                 
                 
-                sv = sqrt(obj.depthHypothesis.idepth_var_smoothed);
-                min_idepth = obj.depthHypothesis.idepth_smoothed - sv*globalParams.STEREO_EPL_VAR_FAC;
-                max_idepth = obj.depthHypothesis.idepth_smoothed + sv*globalParams.STEREO_EPL_VAR_FAC;
+                sv = sqrt(obj.currentDepthMap.idepth_var_smoothed);
+                min_idepth = obj.currentDepthMap.idepth_smoothed - sv*globalParams.STEREO_EPL_VAR_FAC;
+                max_idepth = obj.currentDepthMap.idepth_smoothed + sv*globalParams.STEREO_EPL_VAR_FAC;
                 min_idepth(min_idepth < 0) = 0;
                 oneByMin_Depth = 1/globalParams.MIN_DEPTH;
                 max_idepth(max_idepth > oneByMin_Depth) = oneByMin_Depth;
@@ -531,6 +804,7 @@ classdef DepthMap < handle
                 incx = incx .* (globalParams.GRADIENT_SAMPLE_DIST./eplLength);
                 incy = incy .* (globalParams.GRADIENT_SAMPLE_DIST./eplLength);
                 
+                referenceFrame.validIDs = (referenceFrame.validIDs & eplLength ~= 0);
                 incx(~referenceFrame.validIDs) = 0;
                 incy(~referenceFrame.validIDs) = 0;
 	
@@ -703,14 +977,14 @@ classdef DepthMap < handle
              val_cp_p1 = interp2(x,y,referenceFrameForIntepolation,pF2+iy, pF1+ix,'cubic');
              val_cp_p2 = zeros(size(val_cp_p1,1),1);
              
-                 activeFrameForIntepolation = double(obj.activeFrame.imgGray);
+                 activeKeyFrameForIntepolation = double(obj.activeKeyFrame.imgGray);
                 
                 
-                realVal_p1 = interp2(x,y,activeFrameForIntepolation,vv + epynRf, uu + epxnRf, 'cubic');
-                realVal_m1 = interp2(x,y,activeFrameForIntepolation,vv - epynRf, uu - epxnRf, 'cubic');
-                realVal = interp2(x,y,activeFrameForIntepolation,vv,uu,'cubic') ; 
-                realVal_m2 = interp2(x,y,activeFrameForIntepolation,vv - epynRf, uu - epxnRf, 'cubic');
-                realVal_p2 = interp2(x,y,activeFrameForIntepolation,vv + epynRf, uu + epxnRf, 'cubic');
+                realVal_p1 = interp2(x,y,activeKeyFrameForIntepolation,vv + epynRf, uu + epxnRf, 'cubic');
+                realVal_m1 = interp2(x,y,activeKeyFrameForIntepolation,vv - epynRf, uu - epxnRf, 'cubic');
+                realVal = interp2(x,y,activeKeyFrameForIntepolation,vv,uu,'cubic') ; 
+                realVal_m2 = interp2(x,y,activeKeyFrameForIntepolation,vv - epynRf, uu - epxnRf, 'cubic');
+                realVal_p2 = interp2(x,y,activeKeyFrameForIntepolation,vv + epynRf, uu + epxnRf, 'cubic');
                 
              
                 
@@ -982,7 +1256,7 @@ classdef DepthMap < handle
     referenceFrame.validIDs = newValidIDs;
      %% sampleDist is the distance in pixel at which the realVal's were sampled
 	 sampleDist =  referenceFrame.validIDs .*(globalParams.GRADIENT_SAMPLE_DIST.* rescaleFactor);
-     gradAlongLine = gradAlongLine./(sampleDist.*sampleDist);
+     gradAlongLine = referenceFrame.validIDs .*(gradAlongLine./(sampleDist.*sampleDist));
 
 	
 
@@ -1039,8 +1313,8 @@ classdef DepthMap < handle
         
         
         end
-        [xid,yid] = find(YGrtX);
-        for i = 1: size(xid,1)
+        [uu,vv] = find(YGrtX);
+        for i = 1: size(uu,1)
         
 
 		nom =  nominatorY(uu(i)  , vv(i) );
@@ -1059,11 +1333,11 @@ classdef DepthMap < handle
 
 	%% ================= calc var (in NEW image) ====================
 
-    photoDispError = 4.0 *  globalParams.cameraPixelNoise2 ./ (gradAlongLine + globalParams.DIVISION_EPS);
+    photoDispError = referenceFrame.validIDs .*(4.0 *  globalParams.cameraPixelNoise2 ./ (gradAlongLine + globalParams.DIVISION_EPS));
     trackingErrorFac = 0.25*(1.0+referenceFrame.initialTrackedResidual);
     
-    %[activeFrameGmag_0,activeFrameGdir_0] = imgradient(rgb2gray(obj.activeFrame.imgRGB));
-    activeImageGray = rgb2gray(obj.activeFrame.imgRGB);
+    %[activeKeyFrameGmag_0,activeKeyFrameGdir_0] = imgradient(rgb2gray(obj.activeKeyFrame.imgRGB));
+    activeImageGray = rgb2gray(obj.activeKeyFrame.imgRGB);
     filter = [0 -1 0; -1 0 1;0 1 0];
     grad =  double(imfilter(activeImageGray,filter));
     
@@ -1091,6 +1365,10 @@ classdef DepthMap < handle
    
 	%% final error consists of a small constant part (discretization error),
 	%% geometric and photometric error.
+    geoDispError(isnan(geoDispError)) = 0;
+    photoDispError(isnan(photoDispError)) = 0;
+    geoDispError(isinf(geoDispError)) = 0;
+    photoDispError(isinf(photoDispError)) = 0;
 	result_var = referenceFrame.validIDs .*(alpha.*alpha .* ((0.5).*sampleDist.*sampleDist +  geoDispError + photoDispError));	
     
     
@@ -1100,23 +1378,7 @@ classdef DepthMap < handle
     
     
     
-    [zx,zy] = find(result_idepth ~= 0);
-    zz = result_idepth(result_idepth ~=0);
-    %figure()
-    %scatter3(zx./zz, zy./zz, zz);
-    
-    
-    close all;
-    figure();
-    scale = 50;
-    camPos = referenceFrame.thisToOther_t;
-    camPos(3) = camPos(3) * scale;
-    
-    plotCamera('Location','Orientation',referenceFrame.thisToOther_R,'Opacity',0);
-    hold on
-    
-    pcshow([zx,zy,zz * scale],'MarkerSize', 45);
-    grid on
+  
 %xlim([loc1(1)-5, loc1(1)+4]);
 %ylim([loc1(2)-5, loc1(2)+4]);
 %zlim([loc1(3)-1, loc1(3)+20]);
@@ -1152,8 +1414,6 @@ end
              obj.makeAndCheckEPLMat( x , y , obj.newest_referenceFrame);
          end
          
-         function observeDepthUpdate(obj)
-             %called if depth hypothisis is aviable 
-         end
+         
     end
 end

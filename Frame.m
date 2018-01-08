@@ -28,6 +28,7 @@ classdef Frame < RGBDImage
         tempK;
         validIDs
         initialTrackedResidual
+        depthHasBeenUpdatedFlag
     end
     methods
         function obj = Frame(id, imgZ, imgRGB, cam_info_K)
@@ -62,6 +63,10 @@ classdef Frame < RGBDImage
             
             obj.validIDs = ones(size(imgRGB,1) - 6 + 1 ,size(imgRGB,2) - 6 + 1 );
             obj.initialTrackedResidual = ones(size(imgRGB,1) - 6 + 1 ,size(imgRGB,2) - 6 + 1 );
+            obj.depthHasBeenUpdatedFlag = false;
+            
+            obj.KK = cam_info_K;
+            obj.initialize(id, obj.width, obj.height,obj.KK);
         end
         
         function calculateMeanInformation(obj)
@@ -70,7 +75,19 @@ classdef Frame < RGBDImage
              obj.meanInformation = total ./ sum(sum(nonZeroIDs));
              
         end
+        
         function setDepthFromGroundTruth(obj , depth , cov_scale)
+        end
+        
+        function setDepth(obh, depthmap)
+            
+            
+            
+			%obj.idepth = depthmap.idepth_smoothed;
+			%obj.idepthVar = depthmap,idepth_var_smoothed;
+            
+	
+
         end
         
         %%Sim3 to keyframe
@@ -100,6 +117,27 @@ classdef Frame < RGBDImage
         function camToWorld = getScaledCamToWorld(obj)
             camToWorld = obj.pose.getCamToWorld(1);
         end
+        
+        function flag =  hasTrackingParent(obj)
+            flag = (size(obj.pose.trackingParent,1) ~= 0);
+        end   
+        
+        
+        function tParent = getTrackingParent(obj) 
+            tParent = obj.pose.trackingParent.Frame;
+        end
+        
+        
+        function initialize(obj,id , w, h , k)
+            obj.id = id;
+            %obj.width = w;
+            %obj.height = h;
+            %obj.k = k;
+            obj.pose = FramePoseStruct(obj);
+            obj.Kinv = inv(k);
+        end
     end
 end
+
+
 

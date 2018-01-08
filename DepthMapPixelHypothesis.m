@@ -7,6 +7,8 @@ classdef DepthMapPixelHypothesis < handle
         
         idepth_smoothed
         idepth_var_smoothed
+        
+        validity_counter
     end
     methods
         function obj =  DepthMapPixelHypothesis(my_idepth, my_idepth_smoothed, my_idepth_var, my_idepth_var_smoothed)
@@ -25,9 +27,10 @@ classdef DepthMapPixelHypothesis < handle
             obj.idepth_smoothed(inValidIds) = 0;
           
             obj.blackListed(inValidIds) = 1;
+            obj.isValid(inValidIds) = 0;
             obj.idepth(inValidIds) = 0;
            
-            
+            obj.validity_counter = zeros(size(my_idepth));
             
         end
         

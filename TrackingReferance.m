@@ -24,10 +24,12 @@ classdef TrackingReferance < handle
     end
     methods
         function obj = TrackingReferance()
+            %{
             obj.posData = cell(globalParams.pyramidLevel);
             obj.gradData = cell(globalParams.pyramidLevel);
             obj.colarAndVarData = cell(globalParams.pyramidLevel);
             %obj.numData = cell(globalParams.pyramidLevel);
+            %}
             obj.keyFrame = [];
             obj.frameID = -1;
             obj.wh_allocated = 0;
@@ -49,18 +51,18 @@ classdef TrackingReferance < handle
                 return
             end
             
-            w = obj.keyFrame.width{level};
-            h = obj.keyFrame.height{level};
+            w = obj.keyFrame.width;%{level};
+            h = obj.keyFrame.height;%{level};
             
-            fxInvLevel = obj.keyFrame.fxInv{level};
-            fyInvLevel = obj.keyFrame.fyInv{level};
-            cxInvLevel = obj.keyFrame.cxInv{level};
-            cyInvLevel = obj.keyFrame.cyInv{level};
+            fxInvLevel = obj.keyFrame.fxInv;%{level};
+            fyInvLevel = obj.keyFrame.fyInv;%{level};
+            cxInvLevel = obj.keyFrame.cxInv;%{level};
+            cyInvLevel = obj.keyFrame.cyInv;%{level};
             
-            pyrIdepthSource = obj.keyFrame.idepth{level};
-            pyrIdepthVarSource = obj.keyFrame.idepthVar{level};
-            pyrColorSource = obj.keyFrame.image{level};
-            pyrGradSource = obj.keyFrame.gradients{level}; %%vec4
+            pyrIdepthSource = obj.keyFrame.idepth;%{level};
+            pyrIdepthVarSource = obj.keyFrame.idepthVar;%{level};
+            pyrColorSource = obj.keyFrame.imgRGB;%{level};
+            pyrGradSource = obj.keyFrame.gradients;%{level}; %%vec4
             %{
             posDataPt =obj.posData{level};
             gradDataPt = obj.gradData{level};
@@ -102,9 +104,10 @@ classdef TrackingReferance < handle
             
         end
         function releaseAll(obj)
-            obj.posData = cell(globalParams.pyramidLevel);
-            obj.gradData = cell(globalParams.pyramidLevel);
-            obj.colarAndVarData = cell(globalParams.pyramidLevel);
+            
+            obj.posData = [];% cell(globalParams.pyramidLevel);
+            obj.gradData = [];%cell(globalParams.pyramidLevel);
+            obj.colarAndVarData = [];%cell(globalParams.pyramidLevel);
             %obj.numData = cell(globalParams.pyramidLevel);
             obj.wh_allocated = 0;
         end

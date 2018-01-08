@@ -3,14 +3,16 @@ classdef FramePoseStruct < handle
         Frame
         camToWorld
         camToWorld_new
-        trackingParent %parent frame
+        trackingParent %// parent, the frame originally tracked on. never changes.
         thisToParent_raw
     end
     methods
         function obj = FramePoseStruct(frame)
-            Frame = frame;
-            camToWorld = eye(4);
-            camToWorld_new = eye(4);
+            obj.Frame = frame;
+            obj.camToWorld = eye(4);
+            obj.camToWorld_new = eye(4);
+            obj.thisToParent_raw = eye(4);
+            %obj.trackingParent = 0;
         end
          
         function camToWorld = getCamToWorld(obj, recursionDepth)

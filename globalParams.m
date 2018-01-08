@@ -26,5 +26,25 @@ classdef globalParams
         SAMPLE_POINT_TO_BORDER = 7
         MAX_ERROR_STEREO =  1300.0%4000.0%
         MIN_DISTANCE_ERROR_STEREO =  1.5%6%
+        SUCC_VAR_INC_FAC = 1.01
+        
+        
+        
+        MAX_DIFF_CONSTANT = 40.0 * 40.0
+        MAX_DIFF_GRAD_MULT = 0.5 * 0.5 
+        
+         MIN_ABS_GRAD_CREATE = 5
+         MIN_ABS_GRAD_DECREASE = 5
+         
+         VALIDITY_COUNTER_MAX =  5.0		% validity will never be higher than this
+         VALIDITY_COUNTER_MAX_VARIABLE =  250.0
+         
+         % define how strict the merge-processes etc. are.
+         % are multiplied onto the difference, so the larger, the more restrictive.
+         DIFF_FAC_SMOOTHING = 1.0 *1.0
+         DIFF_FAC_OBSERVE = 1.0 *1.0
+         DIFF_FAC_PROP_MERGE = 1.0 *1.0
+         DIFF_FAC_INCONSISTENT = 1.0  * 1.0
+
     end
 end

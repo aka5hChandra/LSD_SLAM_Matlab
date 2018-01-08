@@ -12,7 +12,7 @@ classdef LSD_SLAM < handle
             MATLAB_minimize = false;
             
             bagfiles{1}='/home/akash/freiburg_data/rgbd_dataset_freiburg1_room.bag';
-            bagfiles{2}='/home/arwillis/freiburg_data/rgbd_dataset_freiburg2_dishes.bag';
+            bagfiles{2}='/home/akash/freiburg_data/lsd_slam_out.bag';
             bagfiles{3}='/home/arwillis/freiburg_data/rgbd_dataset_freiburg3_structure_notexture_far.bag';
             bagfiles{4}='/home/arwillis/freiburg_data/rgbd_dataset_freiburg3_structure_notexture_near.bag';
             bag = rosbag(bagfiles{1});
@@ -24,7 +24,15 @@ classdef LSD_SLAM < handle
                 timeInterval,'Topic','/camera/rgb/image_color');
             select_depth = select(bag, 'Time', ...
                 timeInterval,'Topic','/camera/depth/image');
-            
+            %{
+             select_cam_info = select(bag, 'Time', ...
+                timeInterval,'Topic','/camera/rgb/camera_info');
+            select_rgb = select(bag, 'Time', ...
+                timeInterval,'Topic','/camera/rgb/image_raw');
+            select_depth = select(bag, 'Time', ...
+                timeInterval,'Topic','/camera/depth_registered/image_raw');
+               
+            %}
             
             cam_info_Msgs = readMessages(select_cam_info,1:numImages);
             rgb_Msgs = readMessages(select_rgb,1:numImages);
@@ -49,7 +57,7 @@ classdef LSD_SLAM < handle
             %map = DepthMap(K,w,h);
             
             
-            imageIdx = 2;
+            imageIdx = 5;
             stampA = depth_Msgs{imageIdx}.Header.Stamp.Sec+depth_Msgs{imageIdx}.Header.Stamp.Nsec*10^-9;
             fprintf(1,'Image A TimeStamp %15f\n', stampA);
             imageA = reshape(typecast(depth_Msgs{imageIdx}.Data,'single'),640,480)';
@@ -64,6 +72,7 @@ classdef LSD_SLAM < handle
             keyFrame = imageA2;
             
             imageIdx = 3;
+            for imageIdx = 6 : 9
             stampA = depth_Msgs{imageIdx}.Header.Stamp.Sec+depth_Msgs{imageIdx}.Header.Stamp.Nsec*10^-9;
             fprintf(1,'Image A TimeStamp %15f\n', stampA);
             imageA = reshape(typecast(depth_Msgs{imageIdx}.Data,'single'),640,480)';
@@ -74,6 +83,8 @@ classdef LSD_SLAM < handle
              
             curFrame =  Frame(imageIdx, imageA,imageA2,cam_info.K);
             slamSystem.trackFrame(curFrame);
+            
+            end
                
             for imageIdx=2:numImages-1
                 stampA = depth_Msgs{imageIdx}.Header.Stamp.Sec+depth_Msgs{imageIdx}.Header.Stamp.Nsec*10^-9;

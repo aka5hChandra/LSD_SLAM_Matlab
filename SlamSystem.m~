@@ -1,6 +1,10 @@
 classdef SlamSystem < handle
     properties
-        trackingReference;
+        trackingReference; %tracking reference for current keyframe. only used by tracking.
+        mappingTrackingReference % for mappinng
+        
+        newKFTrackingReference
+        candidateTrackingReference
         map;
         K;
         width, height;
@@ -53,8 +57,14 @@ classdef SlamSystem < handle
             obj.map.observeDepthRow( 3 , obj.height - 3)
             
             %}
-            
+            if(size(obj.trackingReference.keyFrame,1) == 0 | obj.trackingReference.keyFrame ~= obj.currentKeyFrame | obj.currentKeyFrame.depthHasBeenUpdatedFlag)
+                obj.trackingReference.importFrame(obj.currentKeyFrame);
+                obj.currentKeyFrame.depthHasBeenUpdatedFlag = false;
+            end
             thisToOther = obj.rgbdODAMTrack( trackingNewFrame);
+            
+            trackingNewFrame.pose.thisToParent_raw = inv(thisToOther) ;% sim3FromSE3(toSophus(referenceToFrame.inverse()),1);
+            trackingNewFrame.pose.trackingParent =  obj.currentKeyFrame.pose;%trackingReference.keyframe.pose;
             
             %{
             thisToOther = [0.9999    0.0053    0.0101   -0.0052;
@@ -72,12 +82,14 @@ classdef SlamSystem < handle
             %obj.map.updateKeyframe(obj.currentKeyFrame);
             trackingNewFrame.prepareForStereoWith( obj.currentKeyFrame , thisToOther, obj.K, 1);
             [y , x] = meshgrid(3:obj.height-3,3 :obj.width - 3);
-            [flag,pepx,pepy, x, y] = obj.map.makeAndCheckEPLMat( x , y ,trackingNewFrame);
+            %[flag,pepx,pepy, x, y] = obj.map.makeAndCheckEPLMat( x , y ,trackingNewFrame);
+            obj.map.observeDepthUpdate( x , y ,trackingNewFrame);
             %trackingNewFrame.P3_to_P2 * T
             
+            %change it to candidate key feame
+             obj.map.createKeyFrame(trackingNewFrame);
             
-            
-            obj.currentKeyFrame = trackingNewFrame;
+            %obj.currentKeyFrame = trackingNewFrame;
             
         end
         
