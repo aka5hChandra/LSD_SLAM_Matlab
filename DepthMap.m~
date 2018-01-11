@@ -47,12 +47,14 @@ classdef DepthMap < handle
         
         
         function initializeFromGTDepth(obj, new_frame)
+            %new_frame.imgZ = ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));
             obj.activeKeyFrame = new_frame;
             
-            
-            isValid =  (~isnan( new_frame.imgZ) & new_frame.imgZ  > 0) ;   
+            depth =  new_frame.imgZ;%ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));new_frame.imgZ;
+            isValid =  (~isnan( depth) & depth  > 0) ;   
+            depth = isValid  .*depth;
             intialVar = isValid .* globalParams.VAR_GT_INIT_INITIAL;
-            depth =  isValid  .*new_frame.imgZ;%ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));
+         
             validityCounter = isValid .* 20;
             % obj.depthHypothesis = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar);
             obj.currentDepthMap = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar,validityCounter,isValid);
@@ -172,7 +174,7 @@ classdef DepthMap < handle
            ids(3:obj.width-3 , 3 : obj.height - 3) =   referenceFrame.validIDs ;
          
 		obj.currentDepthMap.idepth(ids) = temp(ids);
-        obj.currentDepthMap.idepth_smoothed(ids) = temp(ids);
+        %obj.currentDepthMap.idepth_smoothed(ids) = temp(ids);
         obj.currentDepthMap.isValid  = zeros(obj.width, obj.height);
         obj.currentDepthMap.isValid(3:obj.width-3 , 3 : obj.height - 3)  = referenceFrame.validIDs;
         
@@ -214,15 +216,12 @@ classdef DepthMap < handle
 			target->nextStereoFrameMinID = refFrame->id() + inc;
 		}
             %}
-        
-        
-        %{
-            
+           %{  
               [zx,zy] = find(new_idepth ~= 0);
     zz = result_idepth(new_idepth ~=0);
     %figure()
     %scatter3(zx./zz, zy./zz, zz);
-    
+   
     
     close all;
     figure();
@@ -408,8 +407,10 @@ classdef DepthMap < handle
              obj.activeKeyFrame = new_keyframe;
              
              obj.regularizeDepthMap(true, globalParams.VAL_SUM_MIN_FOR_KEEP);
+              obj.currentDepthMap.isValid(isnan(obj.currentDepthMap.idepth_smoothed))=0;
              obj.regularizeDepthMapFillHoles();
              obj.regularizeDepthMap(false, globalParams.VAL_SUM_MIN_FOR_KEEP);
+                obj.currentDepthMap.isValid(isnan(obj.currentDepthMap.idepth_smoothed))=0;
         
              %regularizeDepthMap
              
@@ -431,7 +432,8 @@ classdef DepthMap < handle
 
 	obj.activeKeyFrame.setDepth(obj.currentDepthMap);
 	
-           
+           viz = obj.currentDepthMap.visualize(1);
+           close all;imshow(viz);
              
          end
          
@@ -454,7 +456,9 @@ classdef DepthMap < handle
                 filter = [-1 0 1];
             [w,h] = size(activeKFImageData);
              gx =  double(imfilter(activeKFImageData,filter));
-             newKFMaxGrad =  gx;%new_keyframe.maxGradients;
+             [Gmag,Gdir] = imgradient( new_keyframe.imgGray);
+             
+             newKFMaxGrad =  Gmag;%gx;%new_keyframe.maxGradients;
              newKFImageData = new_keyframe.imgGray;
              
              [xx , yy] = meshgrid(1:obj.height,1 :obj.width );
@@ -530,9 +534,9 @@ classdef DepthMap < handle
 					
                 end
             end
-
+        
              
-          if( obj.otherDepthMap.isValid(newIDX_X,newIDX_y))
+          if( ~obj.otherDepthMap.isValid(newIDX_X,newIDX_y))
 			
                         
                         obj.otherDepthMap.idepth(newIDX_X,newIDX_y) = new_idepth;
@@ -686,7 +690,7 @@ classdef DepthMap < handle
 
 			%%update!
 			obj.currentDepthMap.idepth_smoothed(x,y)= sum;
-			obj.currentDepthMap.idepth_smoothed(x,y)= 1.0/sumIvar;
+			obj.currentDepthMap.idepth_var_smoothed(x,y)= 1.0/sumIvar;
 
 			           
 			
@@ -700,7 +704,8 @@ classdef DepthMap < handle
                 filter = [-1 0 1];
             [w,h] = size(activeKFImageData);
              gx =  double(imfilter(activeKFImageData,filter));
-             newKFMaxGrad =  gx;%new_keyframe.maxGradients;
+               [Gmag,Gdir] = imgradient( activeKFImageData);
+             newKFMaxGrad = Gmag;% gx;%new_keyframe.maxGradients;
              
              for y= yMin:yMax
              
@@ -735,9 +740,9 @@ classdef DepthMap < handle
 				%idepthObs = UNZERO(idepthObs);
 
 				obj.currentDepthMap.idepth(x,y) =idepthObs;
-                obj.currentDepthMap.idepth_smoothed(x,y) =idepthObs;
+                obj.currentDepthMap.idepth_smoothed(x,y) = idepthObs;
                 obj.currentDepthMap.idepth_var(x,y) =globalParams.VAR_RANDOM_INIT_INITIAL;
-                obj.currentDepthMap.idepth_var_smoothed(x,y) =globalParams.VAR_RANDOM_INIT_INITIAL;
+                obj.currentDepthMap.idepth_var_smoothed(x,y) = globalParams.VAR_RANDOM_INIT_INITIAL;
                  obj.currentDepthMap.validity_counter(x,y)  = 0;
                
 
@@ -1104,34 +1109,49 @@ classdef DepthMap < handle
                 eplInsideIDs = ~(pFar(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER);
                 
                 
-               %{
+              
                tempIDs =  ~(pFar(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER);
                errors(~tempIDs) = -1;
                
                referenceFrame.validIDs = referenceFrame.validIDs &tempIDs;
-               %}
-               %{
-                pFar = pFar(eplInsideIDs , :);
-                pClose = pClose(eplInsideIDs , :);
-                incx = incx(eplInsideIDs);
-                incy = incy(eplInsideIDs);
-                u = u(eplInsideIDs);
-                v = v(eplInsideIDs);
+              
+               pFar(:,:,1) = eplInsideIDs .* pFar(:,:,1);
+               pFar(:,:,2) = eplInsideIDs .* pFar(:,:,2);
+               pFar(:,:,3) = eplInsideIDs .* pFar(:,:,3);
+               
+               pClose(:,:,1) = eplInsideIDs .* pClose(:,:,1);
+               pClose(:,:,2) = eplInsideIDs .* pClose(:,:,2);
+               pClose(:,:,3) = eplInsideIDs .* pClose(:,:,3);
+               
                 
+                incx = eplInsideIDs .* incx;
+                incy = eplInsideIDs .* incy;
+                u = eplInsideIDs .* u;
+                v = eplInsideIDs .* v;
+                
+                
+                
+                KinvP(:,:,1) = eplInsideIDs .* KinvP(:,:,1);
+                KinvP(:,:,2) = eplInsideIDs .* KinvP(:,:,2);
+                KinvP(:,:,3) = eplInsideIDs .* KinvP(:,:,3);
+                %{ 
                 realVal_p1 = realVal_p1(eplInsideIDs);
                 realVal_m1 = realVal_m1(eplInsideIDs);
                 realVal = realVal(eplInsideIDs) ; 
                 realVal_m2 = realVal_m2(eplInsideIDs);
                 realVal_p2 = realVal_p2 (eplInsideIDs);
                 KinvP = KinvP(eplInsideIDs,:);
+                
+                 %}
+               %{
                 %}
                 %% if near point is outside: move inside, and test length again.
 
 			eplInsideIDALLs = ~(pClose(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER);
 	
-            eplInsideIDs = referenceFrame.validIDs & (pClose(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER);
             toAdd = (globalParams.SAMPLE_POINT_TO_BORDER - pClose(:,:,1)) ./ incx;
-            toAdd(~eplInsideIDs) = 0;
+          eplInsideIDs = referenceFrame.validIDs & (pClose(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER);
+              toAdd(~eplInsideIDs) = 0;
             
             %toAdd(eplInsideIDs) = (globalParams.SAMPLE_POINT_TO_BORDER - pClose(eplInsideIDs,1)) ./ incx(eplInsideIDs);
 			pClose(:,:,1) =  pClose(:,:,1) + (toAdd .* incx);
@@ -1172,11 +1192,12 @@ classdef DepthMap < handle
               te = ones(size(pFar,1),size(pFar,2));
               te((pC1(eplInsideIDALLs) <= globalParams.SAMPLE_POINT_TO_BORDER | pC1(eplInsideIDALLs) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER |pC2(eplInsideIDALLs) <= globalParams.SAMPLE_POINT_TO_BORDER | pC2(eplInsideIDALLs) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER | ~(newEplLength(eplInsideIDALLs) < 8.0) )) = 0;
               referenceFrame.validIDs = referenceFrame.validIDs & te;
+              errors(te==0) = -1;
               %referenceFrame.validIDs = referenceFrame.validIDs &  ~(newEplLength < 8.0);
               %{
               eplInsideIDs = ~(pClose(:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER | newEplLength < 8.0);
               tempIDs = eplInsideIDs;
-              errors[~tempIDs] = -1;
+              
             pFar = pFar(eplInsideIDs , :);
               pClose = pClose(eplInsideIDs , :);
                 incx = incx(eplInsideIDs);
@@ -1543,8 +1564,9 @@ classdef DepthMap < handle
 
 	%% check if interpolated error is OK. use evil hack to allow more error if there is a lot of gradient.
     %%% not working
-	%%%referenceFrame.validIDs  = referenceFrame.validIDs  & ~(bm_error > ( globalParams.MAX_ERROR_STEREO + sqrt( gradAlongLine).*20));
+    temp =  ~(bm_error > ( globalParams.MAX_ERROR_STEREO + sqrt( gradAlongLine).*20));referenceFrame.validIDs  = referenceFrame.validIDs  & ~(bm_error > ( globalParams.MAX_ERROR_STEREO + sqrt( gradAlongLine).*20));
 
+	%%%referenceFrame.validIDs  = referenceFrame.validIDs  &
      
      pFar = pFar .*  referenceFrame.validIDs;
      pClose = pClose .*  referenceFrame.validIDs;
