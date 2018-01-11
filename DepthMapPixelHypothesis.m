@@ -1,4 +1,4 @@
-classdef DepthMapPixelHypothesis < handle
+classdef DepthMapPixelHypothesis < matlab.mixin.Copyable%< handle
     properties
         isValid
         blackListed
@@ -11,8 +11,9 @@ classdef DepthMapPixelHypothesis < handle
         validity_counter
     end
     methods
-        function obj =  DepthMapPixelHypothesis(my_idepth, my_idepth_smoothed, my_idepth_var, my_idepth_var_smoothed)
-            obj.isValid = ones(size(my_idepth));
+        function obj =  DepthMapPixelHypothesis(my_idepth, my_idepth_smoothed, my_idepth_var, my_idepth_var_smoothed,validityCounter,valid)
+            obj.isValid = valid;
+            inValidIds = ~valid;
             obj.blackListed = zeros(size(my_idepth));
             
             obj.idepth = my_idepth;
@@ -20,17 +21,17 @@ classdef DepthMapPixelHypothesis < handle
             
             obj.idepth_smoothed = my_idepth_smoothed;
             obj.idepth_var_smoothed = my_idepth_var_smoothed;
+            obj.validity_counter = validityCounter;
             
-            inValidIds = find((isnan(my_idepth) | my_idepth < 0));
+      
             
             obj.idepth(inValidIds) = 0;  
             obj.idepth_smoothed(inValidIds) = 0;
-          
-            obj.blackListed(inValidIds) = 1;
-            obj.isValid(inValidIds) = 0;
-            obj.idepth(inValidIds) = 0;
-           
-            obj.validity_counter = zeros(size(my_idepth));
+            obj.idepth_var(inValidIds) = 0;
+            obj.idepth_var_smoothed(inValidIds) = 0;
+            
+            obj.blackListed(inValidIds) = 0;
+            
             
         end
         

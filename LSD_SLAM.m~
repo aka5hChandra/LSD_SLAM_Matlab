@@ -12,7 +12,7 @@ classdef LSD_SLAM < handle
             MATLAB_minimize = false;
             
             bagfiles{1}='/home/akash/freiburg_data/rgbd_dataset_freiburg1_room.bag';
-            bagfiles{2}='/home/arwillis/freiburg_data/rgbd_dataset_freiburg2_dishes.bag';
+            bagfiles{2}='/home/akash/freiburg_data/lsd_slam_out.bag';
             bagfiles{3}='/home/arwillis/freiburg_data/rgbd_dataset_freiburg3_structure_notexture_far.bag';
             bagfiles{4}='/home/arwillis/freiburg_data/rgbd_dataset_freiburg3_structure_notexture_near.bag';
             bag = rosbag(bagfiles{1});
@@ -24,20 +24,34 @@ classdef LSD_SLAM < handle
                 timeInterval,'Topic','/camera/rgb/image_color');
             select_depth = select(bag, 'Time', ...
                 timeInterval,'Topic','/camera/depth/image');
-            
-            
-            myK = [254.327,0,267.382,0,375.938,231.599,0,0,1]';
-            cam_info_Msgs{1}.K = myK;
+            %{
+             select_cam_info = select(bag, 'Time', ...
+                timeInterval,'Topic','/camera/rgb/camera_info');
+            select_rgb = select(bag, 'Time', ...
+                timeInterval,'Topic','/camera/rgb/image_raw');
+            select_depth = select(bag, 'Time', ...
+                timeInterval,'Topic','/camera/depth_registered/image_raw');
+               
+            %}
             
             cam_info_Msgs = readMessages(select_cam_info,1:numImages);
             rgb_Msgs = readMessages(select_rgb,1:numImages);
             depth_Msgs = readMessages(select_depth,1:numImages);
             
+            
+            myK = [254.327,0,267.382,0,375.938,231.599,0,0,1]';
+            %cam_info_Msgs{1}.K = myK;
+            
+            
             cam_info.D = reshape(cam_info_Msgs{1}.D,1,5);
             cam_info.K = reshape(cam_info_Msgs{1}.K,3,3)';
             cam_info.P = reshape(cam_info_Msgs{1}.P,4,3)';
             
-            slamSystem = SlamSystem(cam_info.K,480,640);
+            
+            
+           
+            
+                slamSystem = SlamSystem(cam_info.K,480,640);
             
             prevT = [];
             %map = DepthMap(K,w,h);
@@ -55,9 +69,10 @@ classdef LSD_SLAM < handle
             %slamSystem.randomInit(initFrame,1);
             slamSystem.depthInit(initFrame,1);
             
+            keyFrame = imageA2;
             
-            
-            imageIdx = 2;
+            imageIdx = 3;
+            for imageIdx = 3 : 9
             stampA = depth_Msgs{imageIdx}.Header.Stamp.Sec+depth_Msgs{imageIdx}.Header.Stamp.Nsec*10^-9;
             fprintf(1,'Image A TimeStamp %15f\n', stampA);
             imageA = reshape(typecast(depth_Msgs{imageIdx}.Data,'single'),640,480)';
@@ -65,11 +80,13 @@ classdef LSD_SLAM < handle
             imageA2 = cat(3,reshape(imageA1(1,:),640,480)',reshape(imageA1(2,:),640,480)',reshape(imageA1(3,:),640,480)');
             rgbdImg1 = RGBDImage(imageA,imageA2,cam_info.K);
             
-            
+             
             curFrame =  Frame(imageIdx, imageA,imageA2,cam_info.K);
             slamSystem.trackFrame(curFrame);
+            
+            end
                
-            for imageIdx=2:numImages-1
+            for imageIdx=:numImages-1
                 stampA = depth_Msgs{imageIdx}.Header.Stamp.Sec+depth_Msgs{imageIdx}.Header.Stamp.Nsec*10^-9;
                 fprintf(1,'Image A TimeStamp %15f\n', stampA);
                 imageA = reshape(typecast(depth_Msgs{imageIdx}.Data,'single'),640,480)';
@@ -89,6 +106,10 @@ classdef LSD_SLAM < handle
                 
                 curFrame =  Frame(imageIdx, imageA,imageA2,cam_info.K);
                 slamSystem.trackFrame(curFrame);
+                %cp = cameraParameters('IntrinsicMatrix',cameraParams.IntrinsicMatrix,'RadialDistortion',cameraParams.RadialDistortion,'ImageSize',cameraParams.ImageSize);  cameraParams = cp;
+           
+                
+                
                 %{
                                 
                 [rows,cols]=size(imageA);

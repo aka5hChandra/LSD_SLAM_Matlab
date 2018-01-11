@@ -107,9 +107,11 @@ classdef SlamSystem < handle
                 warpA = rgbdImg1.warpImage(T);
                 warpA_Z = warpA.getDepthImage();
                 warpA_I = warpA.getGrayImage();
+                %{
                figure(2), subplot(2,3,1), imshow(imgB_I,[0 255]);
                 figure(2), subplot(2,3,2), imshow(warpA_I, [0 255]);
                 figure(2), subplot(2,3,3), imshow(abs(warpA_I - imgB_I),[ ]);
+                %}
                 end
                 for downsample_level=3:-1:3
                     %a_k = [0 0 0 0 0 0];
@@ -127,9 +129,11 @@ classdef SlamSystem < handle
                         %figure(1), subplot(2,3,1), imshow(imgB_Z,[0 8]);
                         %figure(1), subplot(2,3,2), imshow(warpA_Z,[0 8]);
                         %figure(1), subplot(2,3,3), imshow(abs(warpA_Z - imgB_Z),[ ]);
+                        %{
                         figure(1), subplot(2,3,1), imshow(imgB_I);
                         figure(1), subplot(2,3,2), imshow(warpA_I);
                         figure(1), subplot(2,3,3), imshow(abs(warpA_I - imgB_I),[ ]);
+                        %}
                     end
                      MATLAB_minimize = false;
                     if (MATLAB_minimize == true)
@@ -160,9 +164,11 @@ classdef SlamSystem < handle
                         %figure(1), subplot(2,3,4), imshow(imgB_Z,[0 8]);
                         %figure(1), subplot(2,3,5), imshow(warpA2_Z,[0 8]);
                         %figure(1), subplot(2,3,6), imshow(abs(warpA2_Z - imgB_Z),[ ]);
+                        %{
                         figure(1), subplot(2,3,4), imshow(imgB_I);
                         figure(1), subplot(2,3,5), imshow(warpA2_I);
                         figure(1), subplot(2,3,6), imshow(abs(warpA2_I - imgB_I),[ ]);
+                        %}
                     end
                     breakhere = 1;
                 end
@@ -174,13 +180,14 @@ classdef SlamSystem < handle
                 warpA2 = rgbdImg1.warpImage(T);
                 warpA2_Z = warpA2.getDepthImage();
                 warpA2_I = warpA2.getGrayImage();
-                %figure(2), subplot(2,3,4), imshow(imgB_Z,[0 8]);
+                %figure(2), subplot(2,3,4), s(imgB_Z,[0 8]);
                 %figure(2), subplot(2,3,5), imshow(warpA2_Z,[0 8]);
                 %figure(2), subplot(2,3,6), imshow(abs(warpA2_Z - imgB_Z),[ ]);
+                %{
                 figure(2), subplot(2,3,4), imshow(imgB_I,[0 255]);
                 figure(2), subplot(2,3,5), imshow(warpA2_I,[0 255]);
                 figure(2), subplot(2,3,6), imshow(abs(warpA2_I - imgB_I),[ ]);
-                
+                %}
                 breakhere = 1;
                 pause(5);
                 end

@@ -11,6 +11,7 @@ classdef DepthMap < handle
         otherDepthMap;
         K;
         priorDepth;
+        validityIntegralBuffer;
     end
     methods 
         function obj = DepthMap(K,w, h)
@@ -30,7 +31,10 @@ classdef DepthMap < handle
             obj.height = h;
             
              intialVar = ones(w,h) * globalParams.VAR_GT_INIT_INITIAL;
-            obj.otherDepthMap = DepthMapPixelHypothesis(zeros(w,h) , zeros(w,h), intialVar, intialVar);
+             isValid = zeros(w,h) ;
+             validityCounter = 20 * isValid;
+            obj.otherDepthMap = DepthMapPixelHypothesis(zeros(w,h) , zeros(w,h), intialVar, intialVar,validityCounter,isValid);
+            obj.validityIntegralBuffer = zeros(w,h);
           
         end
         
@@ -39,14 +43,20 @@ classdef DepthMap < handle
             %populate random / rgbd depthmap hypothis 
         end
         
+        
+        
+        
         function initializeFromGTDepth(obj, new_frame)
             obj.activeKeyFrame = new_frame;
             
-            intialVar = ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2)) * globalParams.VAR_GT_INIT_INITIAL;
-            depth =  new_frame.imgZ;%ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));
+            
+            isValid =  (~isnan( new_frame.imgZ) & new_frame.imgZ  > 0) ;   
+            intialVar = isValid .* globalParams.VAR_GT_INIT_INITIAL;
+            depth =  isValid  .*new_frame.imgZ;%ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));
+            validityCounter = isValid .* 20;
             % obj.depthHypothesis = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar);
-            obj.currentDepthMap = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar);
-            obj.currentDepthMap.validity_counter(new_frame.imgZ > 0) = 20;
+            obj.currentDepthMap = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar,validityCounter,isValid);
+            %obj.currentDepthMap.validity_counter(new_frame.imgZ > 0) = 20;
             %%using this avoid nans
             obj.priorDepth =  obj.currentDepthMap.idepth; %ones(size(obj.depthHypothesis.idepth,1) , size(obj.depthHypothesis.idepth,2));%
             obj.currentDepthMap.visualize(0);
@@ -109,9 +119,25 @@ classdef DepthMap < handle
         function observeDepthUpdate(obj,x , y , referenceFrame)
             
              [flag,pepx,pepy, x, y ] = makeAndCheckEPLMat(obj,x , y , referenceFrame);
-            [result_idepth, result_var, result_eplLength] = obj.doLineStereo(x,y,pepx,pepy,referenceFrame);
+            [result_idepth, result_var, result_eplLength,errors] = obj.doLineStereo(x,y,pepx,pepy,referenceFrame);
+            
+            %// if just not good for stereo (e.g. some inf / nan occured; has inconsistent minimum; ..)
+            ids = false(obj.width, obj.height);
+           ids(3:obj.width-3 , 3 : obj.height - 3) =  (errors == -2);
+            obj.currentDepthMap.validity_counter(ids) =  obj.currentDepthMap.validity_counter(ids) - globalParams.VALIDITY_COUNTER_DEC;
+            ids2 = (ids & (obj.currentDepthMap.validity_counter == 0));
+            obj.currentDepthMap.validity_counter(ids2) = 0;
+            %target->nextStereoFrameMinID = 0;
+            obj.currentDepthMap.idepth_var(ids)= obj.currentDepthMap.idepth_var(ids) * globalParams.FAIL_VAR_INC_FAC;
+            ids2 = ids & obj.currentDepthMap.idepth_var > globalParams.MAX_VAR;
+            
+            obj.currentDepthMap.isValid(ids2)  = false;
+            obj.currentDepthMap.blackListed(ids2) = obj.currentDepthMap.blackListed(ids2) - 1;
             
             
+   
+			
+		
             
 		% do textbook ekf update:
 		%increase var by a little (prediction-uncertainty);
@@ -120,26 +146,77 @@ classdef DepthMap < handle
 		 w = referenceFrame.validIDs .* (result_var ./ (result_var + id_var));
 
          
-		 new_idepth = (1-w).*result_idepth + w.*obj.currentDepthMap.idepth(3:obj.width-3 , 3 : obj.height - 3) ;
-         depthError = abs(obj.currentDepthMap.idepth(3:obj.width-3 , 3 : obj.height - 3) - result_idepth);
+		 new_idepth = referenceFrame.validIDs .*((1-w).*result_idepth + w.*obj.currentDepthMap.idepth(3:obj.width-3 , 3 : obj.height - 3)) ;
+         diff = (result_idepth - obj.currentDepthMap.idepth_smoothed(3:obj.width-3 , 3 : obj.height - 3));
+         
+                  % if inconsistent
+                   ids = false(obj.width, obj.height);    
+	ids(3:obj.width-3 , 3 : obj.height - 3)  = referenceFrame.validIDs .*((globalParams.DIFF_FAC_OBSERVE.*diff.*diff) > result_var + obj.currentDepthMap.idepth_smoothed(3:obj.width-3 , 3 : obj.height - 3));
+	
+		 obj.currentDepthMap.idepth_var(ids) = obj.currentDepthMap.idepth_var(ids) * globalParams.FAIL_VAR_INC_FAC;
+         ids2 = ids & obj.currentDepthMap.idepth_var > globalParams.MAX_VAR;
+             obj.currentDepthMap.isValid(ids2) = false; 
+
+       
          
          
          
-          obj.currentDepthMap.idepth = zeros(obj.width, obj.height);
-          obj.currentDepthMap.idepth_smoothed = zeros(obj.width, obj.height);
          
-		obj.currentDepthMap.idepth(3:obj.width-3 , 3 : obj.height - 3)  = (new_idepth);
-        obj.currentDepthMap.idepth_smoothed(3:obj.width-3 , 3 : obj.height - 3)  = (new_idepth);
+          %obj.currentDepthMap.idepth = zeros(obj.width, obj.height);
+          %obj.currentDepthMap.idepth_smoothed = zeros(obj.width, obj.height);
+          
+          temp  = zeros(obj.width, obj.height);
+          temp(3:obj.width-3 , 3 : obj.height - 3)  = (new_idepth);
+          
+             ids = false(obj.width, obj.height);
+           ids(3:obj.width-3 , 3 : obj.height - 3) =   referenceFrame.validIDs ;
+         
+		obj.currentDepthMap.idepth(ids) = temp(ids);
+        obj.currentDepthMap.idepth_smoothed(ids) = temp(ids);
         obj.currentDepthMap.isValid  = zeros(obj.width, obj.height);
         obj.currentDepthMap.isValid(3:obj.width-3 , 3 : obj.height - 3)  = referenceFrame.validIDs;
         
        % variance can only decrease from observation; never increase.
-		id_var = id_var .* w;
+       temp =  zeros(obj.width, obj.height);
+       temp(3:obj.width-3 , 3 : obj.height - 3) = id_var;
+       id_var = temp;
+          id_var(3:obj.width-3 , 3 : obj.height - 3)  = (referenceFrame.validIDs .*(id_var(3:obj.width-3 , 3 : obj.height - 3) .* w));
+          
         mask = zeros(size(id_var));
-        mask(id_var < obj.currentDepthMap.idepth_var(3:obj.width-3 , 3 : obj.height - 3)) = 1;
-		obj.currentDepthMap.idepth_var(3:obj.width-3 , 3 : obj.height - 3)=mask.*id_var;
+        mask(id_var < obj.currentDepthMap.idepth_var) = 1;
+         
+          temp  = (ids.*(mask.*id_var));
+        
+		obj.currentDepthMap.idepth_var(ids) = temp(ids);
 		
-            
+        
+        validityInc = referenceFrame.validIDs .*  globalParams.VALIDITY_COUNTER_INC;
+        
+        obj.currentDepthMap.validity_counter(3:obj.width-3 , 3 : obj.height - 3)  =  obj.currentDepthMap.validity_counter(3:obj.width-3 , 3 : obj.height - 3)  + validityInc;
+		%float absGrad = keyFrameMaxGradBuf[idx];
+		%if(target->validity_counter > VALIDITY_COUNTER_MAX+absGrad*(VALIDITY_COUNTER_MAX_VARIABLE)/255.0f)
+		%	target->validity_counter = VALIDITY_COUNTER_MAX+absGrad*(VALIDITY_COUNTER_MAX_VARIABLE)/255.0f;
+        %{
+		%increase Skip!
+		if(result_eplLength < MIN_EPL_LENGTH_CROP)
+		{
+			float inc = activeKeyFrame->numFramesTrackedOnThis / (float)(activeKeyFrame->numMappedOnThis+5);
+			if(inc < 3) inc = 3;
+
+			inc +=  ((int)(result_eplLength*10000)%2);
+
+			if(enablePrintDebugInfo) stats->num_observe_addSkip++;
+
+			if(result_eplLength < 0.5*MIN_EPL_LENGTH_CROP)
+				inc *= 3;
+
+
+			target->nextStereoFrameMinID = refFrame->id() + inc;
+		}
+            %}
+        
+        
+        %{
             
               [zx,zy] = find(new_idepth ~= 0);
     zz = result_idepth(new_idepth ~=0);
@@ -164,7 +241,7 @@ classdef DepthMap < handle
     
     pDepth = obj.priorDepth(3:obj.width-3 , 3 : obj.height - 3);
     pDepth =  referenceFrame.validIDs .* pDepth;
-
+%}
 
         end
         
@@ -326,13 +403,14 @@ classdef DepthMap < handle
              obj.propagateDepth(new_keyframe);
              
              
-             
-             
+       
              
              obj.activeKeyFrame = new_keyframe;
              
-             %regularizeDepthMap
-             % regularizeDepthMapFillHoles
+             obj.regularizeDepthMap(true, globalParams.VAL_SUM_MIN_FOR_KEEP);
+             obj.regularizeDepthMapFillHoles();
+             obj.regularizeDepthMap(false, globalParams.VAL_SUM_MIN_FOR_KEEP);
+        
              %regularizeDepthMap
              
              %make mean inverse depth be one.
@@ -513,12 +591,195 @@ classdef DepthMap < handle
             obj.otherDepthMap.idepth_var(isnan(obj.otherDepthMap.idepth_var)) = 0;
             
             
-              temp = obj.currentDepthMap;
-            obj.currentDepthMap = obj.otherDepthMap;
-            obj.otherDepthMap = temp;
+              temp = copy(obj.currentDepthMap);
+            obj.currentDepthMap = copy(obj.otherDepthMap);
+            obj.otherDepthMap = copy(temp);
+            
+            delete(temp);
+         end
+         
+          function regularizeDepthMap(obj, removeOcclusions,  validityTH)
+              obj.regularizeDepthMapRow(validityTH, 2, obj.height-2,removeOcclusions);
+         end
+         
+         function regularizeDepthMapRow(obj, validityTH,  yMin,  yMax, removeOcclusions)
+             regularize_radius = 2;
+             regDistVar = globalParams.REG_DIST_VAR;
+             for y= yMin:yMax      	
+                for x= regularize_radius:obj.width-regularize_radius
+                    
+                    % dest = obj.currentDepthMap.isvalid(x,y)
+                    %destRead = obj.otherDepthMap.isvalid(x,y)   
+                    
+                     if(~obj.otherDepthMap.isValid(x,y))
+                         continue
+                     end
+                     
+                     sum=0;
+                     val_sum=0;
+                     sumIvar=0;
+                     numOccluding = 0;
+                     numNotOccluding = 0;
+
+                     
+                     for  dx = -regularize_radius:regularize_radius
+                        for  dy=-regularize_radius:regularize_radius
+				
+%source =   obj.otherDepthMap.isValid(x +dx,y + dy) 
+                        if(~obj.otherDepthMap.isValid(x +dx,y + dy)) 
+                            continue;
+                        end
+					%stats->num_reg_total++;
+
+					diff =obj.otherDepthMap.idepth(x +dx,y + dy) - obj.otherDepthMap.idepth(x,y);
+                        if(globalParams.DIFF_FAC_SMOOTHING * diff * diff > obj.otherDepthMap.idepth_var(x +dx,y + dy) + obj.otherDepthMap.idepth_var(x ,y ) )
+                            if(removeOcclusions)
+						
+                                if(obj.otherDepthMap.idepth(x +dx,y + dy)  >  obj.otherDepthMap.idepth(x,y))
+								numOccluding = numOccluding + 1;
+                                end
+                            
+                            end
+                        	continue;
+                        end
+
+					val_sum = val_sum + obj.otherDepthMap.validity_counter(x +dx,y + dy);
+
+                        if(removeOcclusions)
+                            numNotOccluding = numNotOccluding + 1;
+                        end
+					 distFac = double((dx*dx+dy*dy)*regDistVar);
+					 ivar = 1.0/( obj.otherDepthMap.idepth_var(x +dx,y + dy)   + distFac);
+
+					sum = sum + (obj.otherDepthMap.idepth(x +dx,y + dy) * ivar);
+					sumIvar = sumIvar +ivar;
+
+
+                    end
+                     end
+
+                    if(val_sum < validityTH)
+			
+                        obj.currentDepthMap.isValid(x,y) = false;
+                        %%if(enablePrintDebugInfo) stats->num_reg_deleted_secondary++;
+                        obj.currentDepthMap.blackListed(x,y) = obj.currentDepthMap.blackListed(x,y) - 1;
+
+                    %%if(enablePrintDebugInfo) stats->num_reg_setBlacklisted++;
+                     continue;
+                    end
+
+
+                    if(removeOcclusions)
+			
+                        if(numOccluding > numNotOccluding)
+				
+                            obj.currentDepthMap.isValid(x,y) = false;
+                            %%if(enablePrintDebugInfo) stats->num_reg_deleted_occluded++;
+
+                        continue;
+                        end
+                    end
+
+			sum = sum / sumIvar;
+			%sum = UNZERO(sum);
+			
+
+			%%update!
+			obj.currentDepthMap.idepth_smoothed(x,y)= sum;
+			obj.currentDepthMap.idepth_smoothed(x,y)= 1.0/sumIvar;
+
+			           
+			
+                end
+             end
+             
          end
         
-         function [result_idepth, result_var, result_eplLength] = doLineStereo(obj,u,v,epxn,epyn,referenceFrame)
+         function regularizeDepthMapFillHolesRow(obj,yMin, yMax)
+             activeKFImageData = obj.activeKeyFrame.imgGray;
+                filter = [-1 0 1];
+            [w,h] = size(activeKFImageData);
+             gx =  double(imfilter(activeKFImageData,filter));
+             newKFMaxGrad =  gx;%new_keyframe.maxGradients;
+             
+             for y= yMin:yMax
+             
+            for  x=4: obj.width-2
+            if (obj.otherDepthMap.isValid(x,y ))
+               continue; 
+            end
+            %if(keyFrameMaxGradBuf[idx]<MIN_ABS_GRAD_DECREASE) continue;
+                val = obj.validityIntegralBuffer(x+2,y+2) - obj.validityIntegralBuffer(x-3,y+2) - obj.validityIntegralBuffer(x+2,y-3)- obj.validityIntegralBuffer(x-3,y-3);
+            
+                
+                 if((obj.otherDepthMap.blackListed(x,y )  && val > globalParams.VAL_SUM_MIN_FOR_CREATE) || val > globalParams.VAL_SUM_MIN_FOR_UNBLACKLIST)
+                    
+                      sumIdepthObs = 0;
+                      sumIVarObs = 0;
+				 num = 0;
+                 
+                 for dx = -2 :2
+                     for dy = -2 : 2
+                         if (obj.otherDepthMap.isValid(x +dx,y + dy))
+                                continue; 
+                         end
+                         
+                         sumIdepthObs =  sumIdepthObs + (obj.otherDepthMap.idepth(x +dx,y + dy) /obj.otherDepthMap.idepth_var(x +dx,y + dy));
+						sumIVarObs = sumIVarObs + (1.0/obj.otherDepthMap.idepth_var(x +dx,y + dy));
+						num = num+1;
+                     end
+                 end
+    
+
+			 idepthObs = sumIdepthObs / sumIVarObs;
+				%idepthObs = UNZERO(idepthObs);
+
+				obj.currentDepthMap.idepth(x,y) =idepthObs;
+                obj.currentDepthMap.idepth_smoothed(x,y) =idepthObs;
+                obj.currentDepthMap.idepth_var(x,y) =globalParams.VAR_RANDOM_INIT_INITIAL;
+                obj.currentDepthMap.idepth_var_smoothed(x,y) =globalParams.VAR_RANDOM_INIT_INITIAL;
+                 obj.currentDepthMap.validity_counter(x,y)  = 0;
+               
+
+			%	if(enablePrintDebugInfo) stats->num_reg_created++;
+                 end   
+                 end
+            end
+           
+         end
+         
+         function regularizeDepthMapFillHoles(obj)
+             obj.buildRegIntegralBuffer();
+             obj.otherDepthMap = copy(obj.currentDepthMap);
+             obj.regularizeDepthMapFillHolesRow(4,obj.height-2);
+         end
+         
+         function buildRegIntegralBufferRow1(obj,yMin, yMax)
+             
+             for y=yMin:yMax
+                 validityIntegralBufferSUM = 0;
+                 
+                 for x=0:obj.width
+                   if  obj.currentDepthMap.isValid(x,y)
+                       validityIntegralBufferSUM = validityIntegralBufferSUM  + 1;
+                   end
+                     obj.validityIntegralBuffer(x,y) = validityIntegralBufferSUM;
+             
+                 end
+                 
+             end
+         end
+         
+         function buildRegIntegralBuffer(obj)
+           
+            for  y= 2: obj.height
+                for x = 1 : obj.width
+                obj.validityIntegralBuffer(x, y) = obj.validityIntegralBuffer(x, y) + obj.validityIntegralBuffer(x, y-1);   
+                end
+            end
+             
+         end
+         function [result_idepth, result_var, result_eplLength, errors] = doLineStereo(obj,u,v,epxn,epyn,referenceFrame)
              
               
           %{
@@ -538,7 +799,7 @@ classdef DepthMap < handle
                 KinvP(:,2) = obj.fyi*v+obj.cyi;
                 %%KinvP = [obj.fxi*u+obj.cxi,obj.fyi*v+obj.cyi,1.0];
              %}
-              
+             
              
              KinvP = ones(size(u,1),size(u,2) , 3);
              KinvP(:,:, 1) = referenceFrame.validIDs .* (obj.fxi*u+obj.cxi);
@@ -569,7 +830,7 @@ classdef DepthMap < handle
                 %%referenceFrame.validIDs(53 - 3 + 1,3 - 3 + 1,:) = 1;
               
                 
-                
+                errors = zeros(size(referenceFrame.validIDs));
                 temp_t = reshape(referenceFrame.K_otherToThis_t,1,1,3);
                 for i = 1 : size(u,1)
                     for j  = 1 : size(u,2)
@@ -617,9 +878,10 @@ classdef DepthMap < handle
                 eplLines(:,:, 4) = referenceFrame.validIDs .* (v + 2*epyn.*rescaleFactor);
                
                 
-               
-                referenceFrame.validIDs = referenceFrame.validIDs & (~(eplLines(:, :,1) <= 0 | eplLines(:, :,1) >= obj.width - 2 | eplLines(:, :,2) <= 0 | eplLines(:, :,2) >= obj.height - 2 | eplLines(:, :,3) <= 0 | eplLines(:, :,3) >= obj.width - 2 | eplLines(:, :,4) <= 0 | eplLines(:, :,4) >= obj.height - 2));
+               tempIDs = (~(eplLines(:, :,1) <= 0 | eplLines(:, :,1) >= obj.width - 2 | eplLines(:, :,2) <= 0 | eplLines(:, :,2) >= obj.height - 2 | eplLines(:, :,3) <= 0 | eplLines(:, :,3) >= obj.width - 2 | eplLines(:, :,4) <= 0 | eplLines(:, :,4) >= obj.height - 2));
                 
+                referenceFrame.validIDs = referenceFrame.validIDs & tempIDs;
+                errors(~tempIDs) = -1;
                 %not working
                 %%referenceFrame.validIDs = referenceFrame.validIDs & (~(rescaleFactor > 0.7 & rescaleFactor < 1.4) & rescaleFactor ~= 0) ;
                 
@@ -717,6 +979,7 @@ classdef DepthMap < handle
                     
                     if (pFar(i,j,3) < 0.001 )
                         referenceFrame.validIDs(i, j) = 0;
+                        errors(i,j) = -1;
                         pFar(i,j,:) = 0;
                     else
                          pFar(i,j,:)  = pFar(i,j,:)  ./ pFar(i,j,3); 
@@ -755,7 +1018,10 @@ classdef DepthMap < handle
                  pFar(:,:,2) = pF2;
                  pFar(:,:,3) = pF3;
                  %}
-                 referenceFrame.validIDs = referenceFrame.validIDs & ~(isnan(pFar(:,:,1)+pClose(:,:,1)));
+                 
+                 tempIDs= ~(isnan(pFar(:,:,1)+pClose(:,:,1)));
+                 errors(~tempIDs) = -4;
+                 referenceFrame.validIDs = referenceFrame.validIDs & tempIDs;
                  %{
                 validIDs = ~(pFar(:,3) < 0.001 );%%%%% | max_idepth < min_idepth);
                 pFar = pFar(validIDs,:);
@@ -787,6 +1053,11 @@ classdef DepthMap < handle
                 u = u(validIDs);
                 v = v(validIDs);
                 %}
+             
+               tempIDs = ~(eplLength < 0 | isinf(eplLength));
+                 errors(~tempIDs) = -4;
+                referenceFrame.validIDs = referenceFrame.validIDs   & tempIDs;
+             
                 longerEplIds =  eplLength > globalParams.MAX_EPL_LENGTH_CROP;
                 
                 if(any(any(longerEplIds)))
@@ -797,9 +1068,9 @@ classdef DepthMap < handle
                 pClose(:,:,1) = pFar(:,:,1) + incx.*pad;
                 pClose(:,:,2) = pFar(:,:,2) + incy.*pad;
                 %}
-                
-                pClose(longerEplIds,1) = pFar(longerEplIds,1) + incx(longerEplIds).*pad(longerEplIds);
-                pClose(longerEplIds,2) = pFar(longerEplIds,2) + incy(longerEplIds).*pad(longerEplIds);
+                pad(longerEplIds) = incx(longerEplIds).*pad(longerEplIds);
+                pClose(:,:,1) = pFar(:,:,1) + pad;
+                pClose(:,:,2) = pFar(:,:,2) + pad;
                 end
                 incx = incx .* (globalParams.GRADIENT_SAMPLE_DIST./eplLength);
                 incy = incy .* (globalParams.GRADIENT_SAMPLE_DIST./eplLength);
@@ -833,8 +1104,12 @@ classdef DepthMap < handle
                 eplInsideIDs = ~(pFar(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER);
                 
                 
-               % referenceFrame.validIDs = referenceFrame.validIDs & ~(pFar(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER);
+               %{
+               tempIDs =  ~(pFar(:,:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pFar(:,:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER);
+               errors(~tempIDs) = -1;
                
+               referenceFrame.validIDs = referenceFrame.validIDs &tempIDs;
+               %}
                %{
                 pFar = pFar(eplInsideIDs , :);
                 pClose = pClose(eplInsideIDs , :);
@@ -900,7 +1175,9 @@ classdef DepthMap < handle
               %referenceFrame.validIDs = referenceFrame.validIDs &  ~(newEplLength < 8.0);
               %{
               eplInsideIDs = ~(pClose(:,1) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,1) >= obj.width-globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,2) <= globalParams.SAMPLE_POINT_TO_BORDER | pClose(:,2) >= obj.height-globalParams.SAMPLE_POINT_TO_BORDER | newEplLength < 8.0);
-              pFar = pFar(eplInsideIDs , :);
+              tempIDs = eplInsideIDs;
+              errors[~tempIDs] = -1;
+            pFar = pFar(eplInsideIDs , :);
               pClose = pClose(eplInsideIDs , :);
                 incx = incx(eplInsideIDs);
                 incy = incy(eplInsideIDs);
@@ -1195,7 +1472,9 @@ classdef DepthMap < handle
     end
             %    val_cp_p2;
             
-     validIDs =  ~(best_match_err > 4.0 * globalParams.MAX_ERROR_STEREO);
+            tempIDs =  ~(best_match_err > 4.0 * globalParams.MAX_ERROR_STEREO);
+     validIDs = tempIDs;
+     errors(~tempIDs) = -3;
      %{
 	 pFar = pFar(uu - 3 + 1 , vv - 3 + 1,:);%pFar(validIDs , :);
      pClose = pClose(uu - 3 + 1 , vv - 3 + 1,:);%(validIDs , :);
@@ -1210,8 +1489,10 @@ classdef DepthMap < handle
         %}
 	 %%check if clear enough winner
      %validIDs &
-	validIDs = validIDs & ~((abs(loopCBest - loopCSecond) > 1.0 )& (globalParams.MIN_DISTANCE_ERROR_STEREO .* best_match_err > second_best_match_err));
+     tempIDs = ~((abs(loopCBest - loopCSecond) > 1.0 )& (globalParams.MIN_DISTANCE_ERROR_STEREO .* best_match_err > second_best_match_err));
     
+	validIDs = validIDs & tempIDs;
+    errors(~tempIDs) = -2;
      
    %{
     pFar = pFar(validIDs , :);
@@ -1327,9 +1608,10 @@ classdef DepthMap < handle
        
 		
         end
-	
-        referenceFrame.validIDs = referenceFrame.validIDs & ~(idnew_best_match < 0);
-	
+        
+        tempIDs = ~(idnew_best_match < 0);
+        referenceFrame.validIDs = referenceFrame.validIDs & tempIDs;
+        errors(~tempIDs)=-2;
 
 	%% ================= calc var (in NEW image) ====================
 
@@ -1360,17 +1642,17 @@ classdef DepthMap < handle
     end
    
     %}
-   geoDispError = referenceFrame.validIDs .* ((gx .*  epxn  + gy.*epyn) + globalParams.DIVISION_EPS);
+   geoDispError =  ((gx .*  epxn  + gy.*epyn) + globalParams.DIVISION_EPS);
    geoDispError = trackingErrorFac.*trackingErrorFac.*((gx.*gx) + (gy.*gy)) ./ (geoDispError.*geoDispError);
-   
+   geoDispError = referenceFrame.validIDs .* geoDispError;
 	%% final error consists of a small constant part (discretization error),
 	%% geometric and photometric error.
-    geoDispError(isnan(geoDispError)) = 0;
-    photoDispError(isnan(photoDispError)) = 0;
-    geoDispError(isinf(geoDispError)) = 0;
-    photoDispError(isinf(photoDispError)) = 0;
+    %geoDispError(isnan(geoDispError)) = 0;
+    %photoDispError(isnan(photoDispError)) = 0;
+    %geoDispError(isinf(geoDispError)) = 0;
+    %photoDispError(isinf(photoDispError)) = 0;
 	result_var = referenceFrame.validIDs .*(alpha.*alpha .* ((0.5).*sampleDist.*sampleDist +  geoDispError + photoDispError));	
-    
+    result_var(isnan(result_var)) = 0;
     
     result_idepth = referenceFrame.validIDs .*idnew_best_match;
 

@@ -45,6 +45,23 @@ classdef globalParams
          DIFF_FAC_OBSERVE = 1.0 *1.0
          DIFF_FAC_PROP_MERGE = 1.0 *1.0
          DIFF_FAC_INCONSISTENT = 1.0  * 1.0
+         
+         depthSmoothingFactor = 1;
+         
+         REG_DIST_VAR =  (0.075 *0.075 *1*1);
+         
+       FAIL_VAR_INC_FAC = 1.1;
+         
+          MIN_BLACKLIST = -1;
+         
+          VAL_SUM_MIN_FOR_CREATE = 30; % minimal summed validity over 5x5 region to create a new hypothesis for non-blacklisted pixel (hole-filling)
+          VAL_SUM_MIN_FOR_KEEP = 24; %minimal summed validity over 5x5 region to keep hypothesis (regularization)
+        VAL_SUM_MIN_FOR_UNBLACKLIST = 100; %if summed validity surpasses this, a pixel is un-blacklisted.
+        
+        
+        VALIDITY_COUNTER_INC =  5		% validity is increased by this on sucessfull stereo
+	   VALIDITY_COUNTER_DEC = 5		 %validity is decreased by this on failed stereo
+    VALIDITY_COUNTER_INITIAL_OBSERVE =  5
 
     end
 end

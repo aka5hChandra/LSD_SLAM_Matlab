@@ -57,7 +57,7 @@ classdef LSD_SLAM < handle
             %map = DepthMap(K,w,h);
             
             
-            imageIdx = 5;
+            imageIdx = 1;
             stampA = depth_Msgs{imageIdx}.Header.Stamp.Sec+depth_Msgs{imageIdx}.Header.Stamp.Nsec*10^-9;
             fprintf(1,'Image A TimeStamp %15f\n', stampA);
             imageA = reshape(typecast(depth_Msgs{imageIdx}.Data,'single'),640,480)';
@@ -72,7 +72,7 @@ classdef LSD_SLAM < handle
             keyFrame = imageA2;
             
             imageIdx = 3;
-            for imageIdx = 6 : 9
+            for imageIdx = 3 : 9
             stampA = depth_Msgs{imageIdx}.Header.Stamp.Sec+depth_Msgs{imageIdx}.Header.Stamp.Nsec*10^-9;
             fprintf(1,'Image A TimeStamp %15f\n', stampA);
             imageA = reshape(typecast(depth_Msgs{imageIdx}.Data,'single'),640,480)';
