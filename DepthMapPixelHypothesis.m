@@ -47,13 +47,13 @@ classdef DepthMapPixelHypothesis < matlab.mixin.Copyable%< handle
                 end
       
               %% rainbow between 0 and 4
-                r = (0-depth) * 255 / 1.0; 
+                r = (0-depth) * 255 ./ 1.0; 
                 id = r < 0;
                 r(id) = -1 * r(id);
-                g = (1-depth) * 255 / 1.0; 
+                g = (1-depth) * 255 ./ 1.0; 
                 id = g < 0;
                 g(id) = -1 * g(id);
-                b = (2-depth) * 255 / 1.0; 
+                b = (2-depth) * 255 ./ 1.0; 
                 id = b < 0;
                 b(id) = -1 * b(id);
           
@@ -78,10 +78,49 @@ classdef DepthMapPixelHypothesis < matlab.mixin.Copyable%< handle
                 visualized(:,:,2) = 255 - g;
                 visualized(:,:,3) = 255 - b;
             
-                visualized((depth < 0),1) = 255;
-                visualized((depth < 0),2) = 255;
-                visualized((depth < 0),3) = 255;
-            end
+                visualized((depth < 0),:) = 255;
+               
+            elseif (debugDisplay == 2)%plot validity counter
+	
+		 f = obj.validity_counter * (255.0 / (globalParams.VALIDITY_COUNTER_MAX_VARIABLE+globalParams.VALIDITY_COUNTER_MAX));
+		 ids = f < 0;
+         f(ids) = 0;
+         ids = f > 255;
+         f(ids) = 255;
+        
+         visualized(:,:,2) = f;
+         visualized(:,:,3) = f;
+
+	
+            elseif(debugDisplay == 3 | debugDisplay == 4)%plot var
+	
+
+		if(debugDisplay == 3)
+			idv= obj.idepth_var_smoothed;
+		else
+			idv= obj.idepth_var;
+        end
+		 var = - 0.5 * log10(idv);
+
+		var = var*255*0.333;
+		var(var > 255)  = 255;
+        visualized(:,:,1) = 255-var;
+        visualized(:,:,2) = var;
+        visualized(:,:,3) = 0;
+        ids = (var < 0);
+		
+        var(:,:,1) = 0;
+        var(:,:,2) = 0;
+        var(:,:,3) = 255;
+			
+        end
+
+            
+            
+            
+            
+            
+            
         end
 %{
 	 %% plot validity counter

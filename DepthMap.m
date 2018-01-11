@@ -47,12 +47,14 @@ classdef DepthMap < handle
         
         
         function initializeFromGTDepth(obj, new_frame)
+            %new_frame.imgZ = ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));
             obj.activeKeyFrame = new_frame;
             
-            
-            isValid =  (~isnan( new_frame.imgZ) & new_frame.imgZ  > 0) ;   
+            depth =  ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));%new_frame.imgZ;%ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));
+            isValid =  (~isnan( depth) & depth  > 0) ;   
+            depth = isValid  .*depth;
             intialVar = isValid .* globalParams.VAR_GT_INIT_INITIAL;
-            depth =  isValid  .*new_frame.imgZ;%ones(size(new_frame.imgRGB,1),size(new_frame.imgRGB,2));
+         
             validityCounter = isValid .* 20;
             % obj.depthHypothesis = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar);
             obj.currentDepthMap = DepthMapPixelHypothesis(depth , depth, intialVar, intialVar,validityCounter,isValid);
@@ -214,12 +216,12 @@ classdef DepthMap < handle
 			target->nextStereoFrameMinID = refFrame->id() + inc;
 		}
             %}
-            
+           %{  
               [zx,zy] = find(new_idepth ~= 0);
     zz = result_idepth(new_idepth ~=0);
     %figure()
     %scatter3(zx./zz, zy./zz, zz);
-    %{
+   
     
     close all;
     figure();
@@ -430,7 +432,8 @@ classdef DepthMap < handle
 
 	obj.activeKeyFrame.setDepth(obj.currentDepthMap);
 	
-           
+           viz = obj.currentDepthMap.visualize(1);
+           close all;imshow(viz);
              
          end
          
